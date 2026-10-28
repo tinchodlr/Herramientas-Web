@@ -5,7 +5,8 @@ import sitemap from '@astrojs/sitemap';
 
 // Cuando haya dominio, definir SITE_URL (ej: SITE_URL=https://midominio.com npm run build)
 // para que el sitemap, las URLs canónicas y los hreflang salgan con el dominio real.
-const site = process.env.SITE_URL || 'http://localhost:4321';
+// En Netlify, la variable URL ya trae la dirección principal del sitio (la .netlify.app o el dominio propio).
+const site = process.env.SITE_URL || process.env.URL || 'http://localhost:4321';
 
 export default defineConfig({
   site,

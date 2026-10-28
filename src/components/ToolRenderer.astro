@@ -17,6 +17,12 @@ import JsonFormatter from '../tools/JsonFormatter';
 import Base64Tool from '../tools/Base64Tool';
 import WordCounter from '../tools/WordCounter';
 import CaseConverter from '../tools/CaseConverter';
+import Documents from '../tools/Documents';
+import CuitTool from '../tools/CuitTool';
+import BarcodeGenerator from '../tools/BarcodeGenerator';
+import WhatsappLink from '../tools/WhatsappLink';
+import MlTitleGenerator from '../tools/MlTitleGenerator';
+import CsvJson from '../tools/CsvJson';
 
 interface Props {
   id: string;
@@ -47,3 +53,11 @@ const { id, lang } = Astro.props;
 {id === 'base64' && <Base64Tool client:load lang={lang} />}
 {id === 'word-count' && <WordCounter client:load lang={lang} />}
 {id === 'case' && <CaseConverter client:load lang={lang} />}
+{id === 'quote' && <Documents client:load lang={lang} kind="quote" />}
+{id === 'delivery-note' && <Documents client:load lang={lang} kind="delivery" />}
+{id === 'receipt' && <Documents client:load lang={lang} kind="receipt" />}
+{id === 'cuit' && <CuitTool client:load lang={lang} />}
+{id === 'barcode' && <BarcodeGenerator client:load lang={lang} />}
+{id === 'wa-link' && <WhatsappLink client:load lang={lang} />}
+{id === 'ml-title' && <MlTitleGenerator client:load lang={lang} />}
+{id === 'csv-json' && <CsvJson client:load lang={lang} />}

@@ -32,8 +32,8 @@ export const CATEGORIES: Category[] = [
     anchor: { es: 'vendedores', en: 'sellers' },
     name: { es: 'Para vendedores', en: 'For sellers' },
     description: {
-      es: 'Costos de Mercado Libre, SKU y etiquetas de envío listas para imprimir.',
-      en: 'Mercado Libre fees, SKUs and print-ready shipping labels.',
+      es: 'Costos y títulos de Mercado Libre, SKU, etiquetas de envío y presupuestos, remitos y recibos en PDF.',
+      en: 'Mercado Libre fees and titles, SKUs, shipping labels, and quotes, delivery notes and receipts as PDF.',
     },
   },
   {
@@ -42,8 +42,8 @@ export const CATEGORIES: Category[] = [
     anchor: { es: 'generadores', en: 'generators' },
     name: { es: 'Generadores', en: 'Generators' },
     description: {
-      es: 'Códigos QR, contraseñas seguras e identificadores únicos.',
-      en: 'QR codes, strong passwords and unique identifiers.',
+      es: 'Códigos QR y de barras, links de WhatsApp, contraseñas seguras e identificadores únicos.',
+      en: 'QR codes and barcodes, WhatsApp links, strong passwords and unique identifiers.',
     },
   },
   {
@@ -52,8 +52,8 @@ export const CATEGORIES: Category[] = [
     anchor: { es: 'calculadoras', en: 'calculators' },
     name: { es: 'Calculadoras y conversores', en: 'Calculators & converters' },
     description: {
-      es: 'Porcentajes, IVA y conversión de unidades al instante.',
-      en: 'Percentages, VAT and unit conversion, instantly.',
+      es: 'Porcentajes, IVA, CUIT/CUIL y conversión de unidades al instante.',
+      en: 'Percentages, VAT, CUIT/CUIL and unit conversion, instantly.',
     },
   },
   {
@@ -82,8 +82,8 @@ export const CATEGORIES: Category[] = [
     anchor: { es: 'texto', en: 'text' },
     name: { es: 'Texto y desarrollo', en: 'Text & developer' },
     description: {
-      es: 'JSON, Base64, contador de palabras y conversión de mayúsculas.',
-      en: 'JSON, Base64, word counter and text case conversion.',
+      es: 'JSON, CSV, Base64, contador de palabras y conversión de mayúsculas.',
+      en: 'JSON, CSV, Base64, word counter and text case conversion.',
     },
   },
 ];
@@ -459,6 +459,171 @@ export const TOOLS: Tool[] = [
     steps: {
       es: ['Pegá tu texto.', 'Elegí el formato.', 'Copiá el resultado.'],
       en: ['Paste your text.', 'Choose the format.', 'Copy the result.'],
+    },
+  },
+  {
+    id: 'csv-json',
+    category: 'text',
+    icon: 'Table',
+    slug: { es: 'convertidor-csv-json', en: 'csv-json-converter' },
+    name: { es: 'Convertidor CSV ↔ JSON', en: 'CSV ↔ JSON converter' },
+    description: {
+      es: 'Pasá un CSV a JSON o un JSON a CSV. Detecta el separador, respeta las comillas y los códigos con ceros adelante, y el CSV sale listo para abrir en Excel.',
+      en: 'Turn a CSV into JSON or JSON into CSV. It detects the delimiter, respects quotes and leading-zero codes, and the CSV opens cleanly in Excel.',
+    },
+    keywords: {
+      es: 'csv json convertir excel planilla tabla separador punto y coma exportar importar',
+      en: 'csv json convert excel spreadsheet table delimiter semicolon export import',
+    },
+    steps: {
+      es: ['Pegá el contenido o cargá el archivo.', 'Ajustá el separador y las opciones.', 'Copiá o descargá el resultado.'],
+      en: ['Paste the content or load the file.', 'Adjust the delimiter and options.', 'Copy or download the result.'],
+    },
+  },
+
+  // ── Documentos, identificación y mensajería ─────────────────────
+  {
+    id: 'quote',
+    category: 'ecommerce',
+    icon: 'ClipboardList',
+    popular: true,
+    slug: { es: 'generador-de-presupuestos-pdf', en: 'quote-generator-pdf' },
+    name: { es: 'Generador de presupuestos en PDF', en: 'Quote generator (PDF)' },
+    description: {
+      es: 'Armá presupuestos con tu logo, renglones, descuento e IVA discriminado, y descargalos en PDF. Es un documento no fiscal (con la “X”): no reemplaza a la factura.',
+      en: 'Build quotes with your logo, line items, discount and itemized VAT, and download them as PDF. It is a non-fiscal document (marked “X”): it does not replace an invoice.',
+    },
+    keywords: {
+      es: 'presupuesto cotizacion proforma pdf documento no fiscal x iva descuento cliente',
+      en: 'quote quotation estimate proforma pdf non fiscal document vat discount customer',
+    },
+    steps: {
+      es: [
+        'Cargá tus datos y tu logo una sola vez: quedan en tu navegador.',
+        'Completá el cliente y los renglones, con descuento e IVA si corresponde.',
+        'Descargá el PDF: el número del próximo presupuesto se suma solo.',
+      ],
+      en: [
+        'Enter your details and logo once: they stay in your browser.',
+        'Fill in the customer and line items, with discount and VAT if needed.',
+        'Download the PDF: the next quote number is incremented automatically.',
+      ],
+    },
+  },
+  {
+    id: 'delivery-note',
+    category: 'ecommerce',
+    icon: 'PackageCheck',
+    slug: { es: 'generador-de-remitos-pdf', en: 'delivery-note-generator-pdf' },
+    name: { es: 'Generador de remitos en PDF', en: 'Delivery note generator (PDF)' },
+    description: {
+      es: 'Creá remitos con el detalle de la mercadería, con o sin precios y con lugar para firma, aclaración y DNI de quien recibe. Documento no fiscal en PDF.',
+      en: 'Create delivery notes listing the goods, with or without prices and with space for the receiver’s signature, name and ID. Non-fiscal PDF document.',
+    },
+    keywords: {
+      es: 'remito entrega mercaderia envio pdf documento no fiscal firma comprobante',
+      en: 'delivery note dispatch goods shipment pdf non fiscal document signature proof',
+    },
+    steps: {
+      es: ['Cargá tus datos y los del cliente.', 'Agregá los renglones; si querés, mostrá los precios.', 'Descargá el PDF e imprimilo para la firma.'],
+      en: ['Enter your details and the customer’s.', 'Add the lines; show prices if you want.', 'Download the PDF and print it for signing.'],
+    },
+  },
+  {
+    id: 'receipt',
+    category: 'ecommerce',
+    icon: 'HandCoins',
+    slug: { es: 'generador-de-recibos-pdf', en: 'receipt-generator-pdf' },
+    name: { es: 'Generador de recibos en PDF', en: 'Receipt generator (PDF)' },
+    description: {
+      es: 'Armá recibos de pago con el importe escrito en letras, forma de pago y lugar para la firma. Documento no fiscal en PDF, con tus datos y logo.',
+      en: 'Make payment receipts with the amount written out in words, payment method and a signature line. Non-fiscal PDF document with your details and logo.',
+    },
+    keywords: {
+      es: 'recibo pago cobro importe en letras comprobante pdf documento no fiscal efectivo transferencia',
+      en: 'receipt payment amount in words proof pdf non fiscal document cash transfer',
+    },
+    steps: {
+      es: ['Completá quién paga, el importe y el concepto.', 'Elegí la forma de pago.', 'Descargá el PDF: el importe sale escrito en letras.'],
+      en: ['Fill in who pays, the amount and what it is for.', 'Choose the payment method.', 'Download the PDF: the amount is written in words.'],
+    },
+  },
+  {
+    id: 'ml-title',
+    category: 'ecommerce',
+    icon: 'Type',
+    slug: { es: 'generador-de-titulos-mercado-libre', en: 'mercado-libre-title-generator' },
+    name: { es: 'Generador de títulos para Mercado Libre', en: 'Mercado Libre title generator' },
+    description: {
+      es: 'Armá títulos de hasta 60 caracteres con producto, marca, modelo y características, sin palabras promocionales. También revisa los títulos que ya tenés y te propone una versión corregida.',
+      en: 'Build titles of up to 60 characters from product, brand, model and features, without promotional words. It also reviews your existing titles and suggests a corrected version.',
+    },
+    keywords: {
+      es: 'titulo mercadolibre meli publicacion 60 caracteres seo palabras clave mayusculas',
+      en: 'title mercadolibre meli listing 60 characters seo keywords uppercase',
+    },
+    steps: {
+      es: ['Escribí producto, marca, modelo y características.', 'Elegí entre las variantes que entran en 60 caracteres.', 'Copiá el título o pegá los tuyos para revisarlos.'],
+      en: ['Enter product, brand, model and features.', 'Pick one of the variants that fit in 60 characters.', 'Copy the title, or paste yours to review them.'],
+    },
+  },
+  {
+    id: 'barcode',
+    category: 'generators',
+    icon: 'ScanBarcode',
+    popular: true,
+    slug: { es: 'generador-de-codigos-de-barras', en: 'barcode-generator' },
+    name: { es: 'Generador de códigos de barras', en: 'Barcode generator' },
+    description: {
+      es: 'Generá códigos de barras Code 128, EAN-13, EAN-8, UPC-A, Code 39 e ITF-14, de a uno o en lote, y descargalos en PNG o SVG. Calcula solo el dígito verificador.',
+      en: 'Generate Code 128, EAN-13, EAN-8, UPC-A, Code 39 and ITF-14 barcodes, one at a time or in bulk, and download them as PNG or SVG. The check digit is calculated for you.',
+    },
+    keywords: {
+      es: 'codigo de barras ean13 ean8 upc code128 code39 itf14 producto etiqueta lectora gtin',
+      en: 'barcode ean13 ean8 upc code128 code39 itf14 product label scanner gtin',
+    },
+    steps: {
+      es: ['Elegí el formato del código.', 'Escribí uno o pegá varios, uno por línea.', 'Descargalos en PNG o SVG, o todos en un .zip.'],
+      en: ['Choose the barcode format.', 'Type one or paste several, one per line.', 'Download them as PNG or SVG, or all in a .zip.'],
+    },
+  },
+  {
+    id: 'wa-link',
+    category: 'generators',
+    icon: 'MessageCircle',
+    popular: true,
+    slug: { es: 'generador-de-link-de-whatsapp', en: 'whatsapp-link-generator' },
+    name: { es: 'Generador de link de WhatsApp', en: 'WhatsApp link generator' },
+    description: {
+      es: 'Creá un link wa.me con tu número y un mensaje ya escrito, más el QR y un botón HTML para tu web. Acomoda solo los números argentinos (código de área, sin 0 ni 15).',
+      en: 'Create a wa.me link with your number and a pre-written message, plus the QR and an HTML button for your site. Argentine numbers are formatted for you (area code, no 0 or 15).',
+    },
+    keywords: {
+      es: 'whatsapp wa.me link enlace mensaje predeterminado boton chat qr contacto',
+      en: 'whatsapp wa.me link message prefilled button chat qr contact',
+    },
+    steps: {
+      es: ['Elegí el país y escribí el número.', 'Si querés, agregá un mensaje o elegí una plantilla.', 'Copiá el link, el botón HTML o descargá el QR.'],
+      en: ['Pick the country and type the number.', 'Optionally add a message or choose a template.', 'Copy the link, the HTML button or download the QR.'],
+    },
+  },
+  {
+    id: 'cuit',
+    category: 'calculators',
+    icon: 'IdCard',
+    slug: { es: 'validador-y-calculadora-cuit-cuil', en: 'cuit-cuil-validator-calculator' },
+    name: { es: 'Validador y calculadora de CUIT/CUIL', en: 'CUIT/CUIL validator & calculator' },
+    description: {
+      es: 'Verificá si un CUIT o CUIL tiene bien el dígito verificador (de a uno o en lista) o calculalo a partir del DNI. No consulta a ARCA: comprueba que el número esté bien formado.',
+      en: 'Check whether a CUIT or CUIL has a correct check digit (one or a list) or calculate it from the ID number. It does not query ARCA: it checks that the number is well formed.',
+    },
+    keywords: {
+      es: 'cuit cuil dni validar verificar digito verificador calcular afip arca monotributo identificacion tributaria',
+      en: 'cuit cuil dni validate verify check digit calculate afip arca tax id argentina',
+    },
+    steps: {
+      es: ['Pegá uno o varios CUIT/CUIL para validarlos.', 'O elegí “Calcular”, escribí el DNI y el tipo.', 'Copiá el número con o sin guiones.'],
+      en: ['Paste one or more CUIT/CUIL to validate them.', 'Or choose “Calculate”, enter the ID number and the type.', 'Copy the number with or without hyphens.'],
     },
   },
 ];

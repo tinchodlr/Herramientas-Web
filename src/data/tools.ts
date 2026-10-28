@@ -154,23 +154,23 @@ export const TOOLS: Tool[] = [
     slug: { es: 'generador-de-etiquetas-de-envio', en: 'shipping-label-generator' },
     name: { es: 'Generador de etiquetas de envío', en: 'Shipping label generator' },
     description: {
-      es: 'Armá etiquetas de envío con remitente, destinatario, código de barras y bultos. Imprimilas en 10×15 cm (impresora térmica) o en hoja A4.',
-      en: 'Make shipping labels with sender, recipient, barcode and package count. Print them at 4×6 in (thermal printer) or on A4 sheets.',
+      es: 'Armá etiquetas de envío con QR de la dirección y del WhatsApp del cliente. Imprimilas en A4 (3 u 2 por hoja), en impresora térmica 10×15 u 8×14, o descargalas en ZPL para Zebra.',
+      en: 'Make shipping labels with QR codes for the address and the customer’s WhatsApp. Print them on A4 (3 or 2 per sheet), on a 4×6 or 8×14 thermal printer, or download ZPL for Zebra.',
     },
     keywords: {
-      es: 'etiqueta envio rotulo paquete correo flex termica imprimir destinatario remitente',
-      en: 'shipping label parcel package thermal print recipient sender',
+      es: 'etiqueta envio rotulo paquete correo flex moto mensajeria termica zebra zpl qr whatsapp imprimir destinatario remitente',
+      en: 'shipping label parcel package courier thermal zebra zpl qr whatsapp print recipient sender',
     },
     steps: {
       es: [
-        'Completá tus datos de remitente (quedan guardados en tu navegador).',
-        'Cargá un destinatario o pegá varios desde Excel.',
-        'Elegí el tamaño de etiqueta e imprimí.',
+        'Completá tus datos de remitente y tu logo (quedan guardados en tu navegador).',
+        'Cargá un destinatario o pegá varios envíos desde Excel.',
+        'Elegí el formato: hoja A4, impresora térmica o ZPL, e imprimí.',
       ],
       en: [
-        'Fill in your sender details (they are saved in your browser).',
-        'Add one recipient or paste several from Excel.',
-        'Pick the label size and print.',
+        'Fill in your sender details and logo (they are saved in your browser).',
+        'Add one recipient or paste several shipments from Excel.',
+        'Choose the format: A4 sheet, thermal printer or ZPL, and print.',
       ],
     },
   },

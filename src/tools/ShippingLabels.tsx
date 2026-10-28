@@ -1,163 +1,212 @@
+import type { ComponentChildren } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
-import { ImageUp, Printer, Trash2 } from 'lucide-preact';
-import JsBarcode from 'jsbarcode';
-import { Field, Segmented, useStoredState, type Lang } from './shared/ui';
+import { Download, ImageUp, Printer, Trash2 } from 'lucide-preact';
+import { CopyButton, Field, Segmented, downloadText, useStoredState, type Lang } from './shared/ui';
+import { qrSvg } from './shared/qr';
+import {
+  SIZE_MM, addressText, expandPackages, senderLine, whatsappLink,
+  type Format, type LabelItem, type LabelSize, type Recipient, type Sender,
+} from './shipping/model';
+import { buildZpl } from './shipping/zpl';
 
-interface Sender {
-  name: string;
-  address: string;
-  city: string;
-  cp: string;
-  phone: string;
-  logo: string;
-}
-
-interface Recipient {
-  name: string;
-  address: string;
-  city: string;
-  province: string;
-  cp: string;
-  phone: string;
-  order: string;
-  packages: string;
-  weight: string;
-  notes: string;
-  fragile: boolean;
-}
-
-type Format = 'thermal' | 'a4';
-
-const EMPTY_SENDER: Sender = { name: '', address: '', city: '', cp: '', phone: '', logo: '' };
-const EXAMPLE_RECIPIENT: Recipient = {
-  name: 'María González',
-  address: 'Av. Rivadavia 1234, piso 3 B',
-  city: 'Ramos Mejía',
-  province: 'Buenos Aires',
-  cp: '1704',
-  phone: '11 5555-1234',
-  order: 'PED-000123',
-  packages: '1',
-  weight: '',
-  notes: '',
-  fragile: false,
+const EMPTY_SENDER: Sender = { business: '', owner: '', street: '', barrio: '', city: '', cp: '', logo: '' };
+const EMPTY_RECIPIENT: Recipient = { order: '', name: '', street: '', floor: '', barrio: '', city: '', cp: '', phone: '', notes: '', packages: '1' };
+const EXAMPLE: Record<Lang, Recipient> = {
+  es: { order: '00123', name: 'María González', street: 'Av. Rivadavia 1234', floor: '3 B', barrio: 'Caballito', city: 'CABA', cp: '1406', phone: '11 5555-1234', notes: 'Tocar timbre 2 veces', packages: '1' },
+  en: { order: '00123', name: 'Mary Johnson', street: '742 Evergreen Terrace', floor: 'Apt 3B', barrio: 'Downtown', city: 'Springfield', cp: '62704', phone: '+1 555 555 1234', notes: 'Ring twice', packages: '1' },
 };
+
+const PREFS = { format: 'a4-8x14' as Format, pos: 1, zplSize: '10x15' as LabelSize, dpi: 203 };
 
 const T = {
   es: {
     sender: 'Remitente',
-    senderHint: 'Se guarda en este navegador para la próxima vez.',
-    name: 'Nombre o empresa',
-    address: 'Dirección',
-    city: 'Localidad',
-    province: 'Provincia',
-    cp: 'Código postal',
-    phone: 'Teléfono',
-    logo: 'Logo',
+    senderHint: 'Se guarda en este navegador para la próxima vez. Nada se sube a ningún servidor.',
+    logo: 'Logo (opcional)',
     uploadLogo: 'Subir logo',
-    removeLogo: 'Quitar logo',
+    removeLogo: 'Quitar',
+    business: 'Nombre del negocio',
+    owner: 'Titular / responsable',
+    street: 'Calle y altura',
+    barrio: 'Barrio',
+    city: 'Localidad',
+    cp: 'CP',
     recipient: 'Destinatario',
     single: 'Una etiqueta',
     bulk: 'Varias (pegar desde Excel)',
-    order: 'N.º de pedido o seguimiento',
-    orderHint: 'Se imprime como código de barras.',
+    order: 'Número de pedido / referencia',
+    name: 'Nombre del destinatario',
+    floor: 'Piso / depto / timbre',
+    phone: 'Teléfono / WhatsApp',
+    phoneHint: 'Se imprime un QR que abre el chat. Si no es de Argentina, escribilo con + y código de país.',
+    notes: 'Indicaciones (opcional)',
     packages: 'Bultos',
-    weight: 'Peso (kg)',
-    notes: 'Observaciones',
-    fragile: 'Frágil',
+    date: 'Fecha de envío',
     bulkHint:
-      'Una fila por envío, columnas separadas por tabulación (copiado de Excel) o punto y coma, en este orden: Nombre; Dirección; Localidad; Provincia; CP; Teléfono; Pedido; Bultos; Observaciones.',
-    format: 'Tamaño',
-    thermal: '10 × 15 cm (térmica)',
-    a4: 'A4 (4 por hoja)',
+      'Una fila por envío, con columnas separadas por tabulación (copiadas de Excel) o punto y coma, en este orden: Pedido; Nombre; Calle y altura; Piso/depto; Barrio; Localidad; CP; Teléfono; Indicaciones; Bultos.',
+    format: 'Formato de impresión',
+    formats: {
+      'a4-8x14': 'A4 · 8×14 (3 por hoja)',
+      'a4-10x15': 'A4 · 10×15 (2 por hoja)',
+      'term-10x15': 'Térmica 10×15',
+      'term-8x14': 'Térmica 8×14',
+      zpl: 'ZPL (Zebra)',
+    } as Record<Format, string>,
+    position: 'Posición en la hoja',
+    positionHint: 'Para aprovechar una hoja ya usada: la primera etiqueta sale en esa posición.',
+    zplSize: 'Tamaño',
+    dpi: 'DPI de la impresora',
     print: 'Imprimir',
+    downloadZpl: 'Descargar ZPL',
     preview: 'Vista previa',
     labels: (n: number) => (n === 1 ? '1 etiqueta' : `${n} etiquetas`),
+    sheets: (n: number) => (n === 1 ? '1 hoja' : `${n} hojas`),
     more: (n: number) => `y ${n} más al imprimir`,
-    from: 'Remitente',
-    to: 'Destinatario',
-    pkg: 'Bulto',
-    of: 'de',
-    tel: 'Tel.',
-    cpShort: 'CP',
-    printTip: 'En el diálogo de impresión elegí escala 100 % y desactivá encabezados y pies de página.',
+    printTip: 'En el diálogo de impresión elegí escala 100 % (tamaño real) y desactivá encabezados y pies de página.',
+    zplTip: 'Mandá el archivo a la impresora Zebra (por ejemplo, con Zebra Setup Utilities). Para revisarlo antes, pegá el código en el visor de labelary.com.',
+    zplApprox: 'Vista aproximada: la impresora dibuja el ZPL con sus propias fuentes.',
     noLabels: 'Completá al menos el nombre del destinatario.',
+    l: {
+      order: 'Pedido',
+      shipping: 'ENVÍO',
+      pkg: 'BULTO',
+      sender: 'Remitente',
+      recipient: 'Destinatario',
+      addrQr: 'Dirección (QR)',
+      barrio: 'Barrio',
+      city: 'Localidad',
+      floor: 'Dpto/timbre',
+      notes: 'Indicaciones',
+      ref: 'Referencia',
+      address: 'Dirección',
+      waClient: 'WhatsApp del cliente',
+      tel: 'Tel.',
+    },
   },
   en: {
     sender: 'Sender',
-    senderHint: 'Saved in this browser for next time.',
-    name: 'Name or company',
-    address: 'Address',
-    city: 'City',
-    province: 'State / province',
-    cp: 'Postal code',
-    phone: 'Phone',
-    logo: 'Logo',
+    senderHint: 'Saved in this browser for next time. Nothing is uploaded to any server.',
+    logo: 'Logo (optional)',
     uploadLogo: 'Upload logo',
-    removeLogo: 'Remove logo',
+    removeLogo: 'Remove',
+    business: 'Business name',
+    owner: 'Owner / contact person',
+    street: 'Street and number',
+    barrio: 'Neighborhood',
+    city: 'City',
+    cp: 'ZIP',
     recipient: 'Recipient',
     single: 'One label',
     bulk: 'Many (paste from Excel)',
-    order: 'Order or tracking number',
-    orderHint: 'Printed as a barcode.',
+    order: 'Order number / reference',
+    name: 'Recipient name',
+    floor: 'Apt / floor / buzzer',
+    phone: 'Phone / WhatsApp',
+    phoneHint: 'A QR that opens the chat is printed. Write it with + and the country code.',
+    notes: 'Delivery notes (optional)',
     packages: 'Packages',
-    weight: 'Weight (kg)',
-    notes: 'Notes',
-    fragile: 'Fragile',
+    date: 'Ship date',
     bulkHint:
-      'One row per shipment, columns separated by tab (copied from Excel) or semicolon, in this order: Name; Address; City; State; Postal code; Phone; Order; Packages; Notes.',
-    format: 'Size',
-    thermal: '4 × 6 in (thermal)',
-    a4: 'A4 (4 per sheet)',
+      'One row per shipment, columns separated by tab (copied from Excel) or semicolon, in this order: Order; Name; Street; Apt/floor; Neighborhood; City; ZIP; Phone; Notes; Packages.',
+    format: 'Print format',
+    formats: {
+      'a4-8x14': 'A4 · 8×14 cm (3 per sheet)',
+      'a4-10x15': 'A4 · 4×6 in (2 per sheet)',
+      'term-10x15': 'Thermal 4×6 in',
+      'term-8x14': 'Thermal 8×14 cm',
+      zpl: 'ZPL (Zebra)',
+    } as Record<Format, string>,
+    position: 'Position on the sheet',
+    positionHint: 'To reuse a partly used sheet: the first label prints in that position.',
+    zplSize: 'Size',
+    dpi: 'Printer DPI',
     print: 'Print',
+    downloadZpl: 'Download ZPL',
     preview: 'Preview',
     labels: (n: number) => (n === 1 ? '1 label' : `${n} labels`),
+    sheets: (n: number) => (n === 1 ? '1 sheet' : `${n} sheets`),
     more: (n: number) => `and ${n} more when printing`,
-    from: 'From',
-    to: 'Ship to',
-    pkg: 'Package',
-    of: 'of',
-    tel: 'Tel.',
-    cpShort: 'ZIP',
-    printTip: 'In the print dialog choose 100% scale and turn off headers and footers.',
+    printTip: 'In the print dialog choose 100% scale (actual size) and turn off headers and footers.',
+    zplTip: 'Send the file to your Zebra printer (for example with Zebra Setup Utilities). To check it first, paste the code into the labelary.com viewer.',
+    zplApprox: 'Approximate preview: the printer renders ZPL with its own fonts.',
     noLabels: 'Fill in at least the recipient name.',
+    l: {
+      order: 'Order',
+      shipping: 'SHIPPING',
+      pkg: 'PACKAGE',
+      sender: 'Sender',
+      recipient: 'Recipient',
+      addrQr: 'Address (QR)',
+      barrio: 'Area',
+      city: 'City',
+      floor: 'Apt',
+      notes: 'Notes',
+      ref: 'Notes',
+      address: 'Address',
+      waClient: 'Customer WhatsApp',
+      tel: 'Tel.',
+    },
   },
 };
 
-const PREVIEW_MAX = 4;
+type Words = (typeof T)['es']['l'];
+
+const isA4 = (f: Format) => f === 'a4-8x14' || f === 'a4-10x15';
+const sizeOf = (f: Format, zplSize: LabelSize): LabelSize => (f === 'zpl' ? zplSize : f.endsWith('8x14') ? '8x14' : '10x15');
+const MM = 96 / 25.4;
 
 export default function ShippingLabels({ lang }: { lang: Lang }) {
   const t = T[lang];
-  const [sender, setSender] = useStoredState<Sender>('labels-sender', EMPTY_SENDER);
-  const [prefs, setPrefs] = useStoredState('labels-prefs', { format: 'thermal' as Format });
+  const [sender, setSender] = useStoredState<Sender>('shipping-sender', EMPTY_SENDER);
+  const [prefs, setPrefs] = useStoredState('shipping-prefs', PREFS);
   const [mode, setMode] = useState<'single' | 'bulk'>('single');
-  const [rec, setRec] = useState<Recipient>(EXAMPLE_RECIPIENT);
+  const [rec, setRec] = useState<Recipient>(EXAMPLE[lang]);
   const [bulkText, setBulkText] = useState('');
+  const [date, setDate] = useState('');
   const [printing, setPrinting] = useState(false);
   const logoInput = useRef<HTMLInputElement>(null);
 
+  useEffect(() => setDate(new Date().toLocaleDateString('sv')), []);
+
   const setS = (k: keyof Sender, v: string) => setSender((p) => ({ ...p, [k]: v }));
-  const setR = <K extends keyof Recipient>(k: K, v: Recipient[K]) => setRec((p) => ({ ...p, [k]: v }));
+  const setR = (k: keyof Recipient, v: string) => setRec((p) => ({ ...p, [k]: v }));
+  const setP = <K extends keyof typeof PREFS>(k: K, v: (typeof PREFS)[K]) => setPrefs((p) => ({ ...p, [k]: v }));
+
+  const format = prefs.format;
+  const size = sizeOf(format, prefs.zplSize);
+  const perSheet = format === 'a4-8x14' ? 3 : 2;
+  const pos = Math.min(prefs.pos, perSheet);
+  const dateText = useMemo(() => {
+    const [y, m, d] = date.split('-').map(Number);
+    return y ? new Date(y, m - 1, d).toLocaleDateString(lang === 'es' ? 'es-AR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+  }, [date, lang]);
 
   const recipients = useMemo<Recipient[]>(() => {
     if (mode === 'single') return rec.name.trim() ? [rec] : [];
     return bulkText
       .split(/\r?\n/)
       .map((line) => line.split(line.includes('\t') ? '\t' : ';').map((c) => c.trim()))
-      .filter((c) => c[0])
-      .map(([name, address = '', city = '', province = '', cp = '', phone = '', order = '', packages = '1', notes = '']) => ({
-        name, address, city, province, cp, phone, order, packages, notes, weight: '', fragile: false,
-      }));
+      .filter((c) => c.some(Boolean))
+      .map(([order = '', name = '', street = '', floor = '', barrio = '', city = '', cp = '', phone = '', notes = '', packages = '1']) => ({
+        order, name, street, floor, barrio, city, cp, phone, notes, packages,
+      }))
+      .filter((r) => r.name);
   }, [mode, rec, bulkText]);
 
-  const labels = useMemo(
-    () =>
-      recipients.flatMap((r) => {
-        const total = Math.min(Math.max(parseInt(r.packages, 10) || 1, 1), 50);
-        return Array.from({ length: total }, (_, i) => ({ r, n: i + 1, total }));
-      }),
-    [recipients],
+  const items = useMemo(() => expandPackages(recipients), [recipients]);
+
+  /** Hojas A4 con huecos al principio según la posición elegida. */
+  const sheets = useMemo(() => {
+    const slots: (LabelItem | null)[] = [...Array(pos - 1).fill(null), ...items];
+    const out: (LabelItem | null)[][] = [];
+    for (let i = 0; i < slots.length; i += perSheet) out.push(slots.slice(i, i + perSheet));
+    return out;
+  }, [items, pos, perSheet]);
+
+  const zpl = useMemo(
+    () => (format === 'zpl' && items.length ? buildZpl(items, sender, dateText, prefs.zplSize, prefs.dpi, lang, t.l) : ''),
+    [format, items, sender, dateText, prefs.zplSize, prefs.dpi, lang],
   );
 
   const onLogo = async (file: File) => {
@@ -172,29 +221,27 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
 
   useEffect(() => {
     if (!printing) return;
+    const [w, h] = SIZE_MM[size];
     const style = document.createElement('style');
-    style.textContent = prefs.format === 'thermal' ? '@page { size: 100mm 150mm; margin: 0; }' : '@page { size: A4; margin: 0; }';
+    style.textContent = isA4(format) ? '@page { size: 297mm 210mm; margin: 0; }' : `@page { size: ${w}mm ${h}mm; margin: 0; }`;
     document.head.appendChild(style);
     document.body.classList.add('printing');
-    const done = () => {
-      document.body.classList.remove('printing');
-      style.remove();
-      setPrinting(false);
-    };
-    // Un respiro para que el portal y los códigos de barras terminen de dibujarse antes de imprimir.
+    // Un respiro para que el portal termine de dibujarse antes de abrir el diálogo.
     const id = setTimeout(() => {
       window.print();
-      setTimeout(done, 300);
+      setTimeout(() => {
+        document.body.classList.remove('printing');
+        style.remove();
+        setPrinting(false);
+      }, 300);
     }, 60);
     return () => clearTimeout(id);
   }, [printing]);
 
-  const sheets = useMemo(() => {
-    if (prefs.format === 'thermal') return labels.map((l) => [l]);
-    const out: (typeof labels)[] = [];
-    for (let i = 0; i < labels.length; i += 4) out.push(labels.slice(i, i + 4));
-    return out;
-  }, [labels, prefs.format]);
+  const label = (item: LabelItem) =>
+    isA4(format) ? <SheetLabel item={item} s={sender} date={dateText} size={size} lang={lang} w={t.l} /> : <ThermalLabel item={item} s={sender} date={dateText} size={size} lang={lang} w={t.l} />;
+
+  const [lw, lh] = SIZE_MM[size];
 
   return (
     <div class="tool-layout">
@@ -202,48 +249,41 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
         <section class="panel">
           <h2 class="panel-title">{t.sender}</h2>
           <div class="stack">
-            <div class="form-grid">
-              <Field label={t.name} htmlFor="s-name">
-                <input id="s-name" class="input" value={sender.name} onInput={(e) => setS('name', e.currentTarget.value)} />
-              </Field>
-              <Field label={t.phone} htmlFor="s-phone">
-                <input id="s-phone" class="input" type="tel" value={sender.phone} onInput={(e) => setS('phone', e.currentTarget.value)} />
-              </Field>
-            </div>
-            <Field label={t.address} htmlFor="s-address">
-              <input id="s-address" class="input" value={sender.address} onInput={(e) => setS('address', e.currentTarget.value)} />
-            </Field>
-            <div class="form-grid">
-              <Field label={t.city} htmlFor="s-city">
-                <input id="s-city" class="input" value={sender.city} onInput={(e) => setS('city', e.currentTarget.value)} />
-              </Field>
-              <Field label={t.cp} htmlFor="s-cp">
-                <input id="s-cp" class="input" value={sender.cp} onInput={(e) => setS('cp', e.currentTarget.value)} />
-              </Field>
-            </div>
             <div class="logo-row">
-              {sender.logo && <img src={sender.logo} alt="" class="logo-preview" />}
-              <button type="button" class="btn btn-sm" onClick={() => logoInput.current?.click()}>
-                <ImageUp aria-hidden="true" />
-                {t.uploadLogo}
-              </button>
-              {sender.logo && (
-                <button type="button" class="btn btn-sm btn-ghost btn-danger" onClick={() => setS('logo', '')}>
-                  <Trash2 aria-hidden="true" />
-                  {t.removeLogo}
+              <div class="logo-prev">{sender.logo ? <img src={sender.logo} alt="" /> : <ImageUp aria-hidden="true" />}</div>
+              <div class="btn-row">
+                <button type="button" class="btn btn-sm" onClick={() => logoInput.current?.click()}>
+                  {t.uploadLogo}
                 </button>
-              )}
+                {sender.logo && (
+                  <button type="button" class="btn btn-sm btn-ghost btn-danger" onClick={() => setS('logo', '')}>
+                    <Trash2 aria-hidden="true" />
+                    {t.removeLogo}
+                  </button>
+                )}
+              </div>
               <input
                 ref={logoInput}
                 type="file"
                 accept="image/*"
                 hidden
+                aria-label={t.logo}
                 onChange={(e) => {
                   const f = e.currentTarget.files?.[0];
                   if (f) onLogo(f);
                   e.currentTarget.value = '';
                 }}
               />
+            </div>
+            <div class="form-grid">
+              <TextField id="s-business" label={t.business} value={sender.business} onInput={(v) => setS('business', v)} />
+              <TextField id="s-owner" label={t.owner} value={sender.owner} onInput={(v) => setS('owner', v)} />
+            </div>
+            <TextField id="s-street" label={t.street} value={sender.street} onInput={(v) => setS('street', v)} />
+            <div class="grid-3">
+              <TextField id="s-barrio" label={t.barrio} value={sender.barrio} onInput={(v) => setS('barrio', v)} />
+              <TextField id="s-city" label={t.city} value={sender.city} onInput={(v) => setS('city', v)} />
+              <TextField id="s-cp" label={t.cp} value={sender.cp} onInput={(v) => setS('cp', v)} />
             </div>
             <span class="hint">{t.senderHint}</span>
           </div>
@@ -252,58 +292,36 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
         <section class="panel">
           <div class="panel-head-row">
             <h2 class="panel-title" style="margin:0">{t.recipient}</h2>
-            <Segmented
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: 'single', label: t.single },
-                { value: 'bulk', label: t.bulk },
-              ]}
-            />
+            <Segmented value={mode} onChange={setMode} options={[{ value: 'single', label: t.single }, { value: 'bulk', label: t.bulk }]} />
           </div>
-
           {mode === 'single' ? (
             <div class="stack">
               <div class="form-grid">
-                <Field label={t.name} htmlFor="r-name">
-                  <input id="r-name" class="input" value={rec.name} onInput={(e) => setR('name', e.currentTarget.value)} />
-                </Field>
-                <Field label={t.phone} htmlFor="r-phone">
-                  <input id="r-phone" class="input" type="tel" value={rec.phone} onInput={(e) => setR('phone', e.currentTarget.value)} />
-                </Field>
-              </div>
-              <Field label={t.address} htmlFor="r-address">
-                <input id="r-address" class="input" value={rec.address} onInput={(e) => setR('address', e.currentTarget.value)} />
-              </Field>
-              <div class="form-grid">
-                <Field label={t.city} htmlFor="r-city">
-                  <input id="r-city" class="input" value={rec.city} onInput={(e) => setR('city', e.currentTarget.value)} />
-                </Field>
-                <Field label={t.province} htmlFor="r-prov">
-                  <input id="r-prov" class="input" value={rec.province} onInput={(e) => setR('province', e.currentTarget.value)} />
-                </Field>
-                <Field label={t.cp} htmlFor="r-cp">
-                  <input id="r-cp" class="input" value={rec.cp} onInput={(e) => setR('cp', e.currentTarget.value)} />
-                </Field>
+                <TextField id="r-order" label={t.order} value={rec.order} onInput={(v) => setR('order', v)} />
+                <TextField id="r-name" label={t.name} value={rec.name} onInput={(v) => setR('name', v)} />
               </div>
               <div class="form-grid">
-                <Field label={t.order} htmlFor="r-order" hint={t.orderHint}>
-                  <input id="r-order" class="input" value={rec.order} onInput={(e) => setR('order', e.currentTarget.value)} />
-                </Field>
-                <Field label={t.packages} htmlFor="r-pk">
-                  <input id="r-pk" class="input" type="number" min={1} max={50} value={rec.packages} onInput={(e) => setR('packages', e.currentTarget.value)} />
-                </Field>
-                <Field label={t.weight} htmlFor="r-w">
-                  <input id="r-w" class="input" inputMode="decimal" value={rec.weight} onInput={(e) => setR('weight', e.currentTarget.value)} />
-                </Field>
+                <TextField id="r-street" label={t.street} value={rec.street} onInput={(v) => setR('street', v)} />
+                <TextField id="r-floor" label={t.floor} value={rec.floor} onInput={(v) => setR('floor', v)} />
               </div>
-              <Field label={t.notes} htmlFor="r-notes">
-                <input id="r-notes" class="input" value={rec.notes} onInput={(e) => setR('notes', e.currentTarget.value)} />
-              </Field>
-              <label class="check">
-                <input type="checkbox" checked={rec.fragile} onChange={(e) => setR('fragile', e.currentTarget.checked)} />
-                {t.fragile}
-              </label>
+              <div class="grid-3">
+                <TextField id="r-barrio" label={t.barrio} value={rec.barrio} onInput={(v) => setR('barrio', v)} />
+                <TextField id="r-city" label={t.city} value={rec.city} onInput={(v) => setR('city', v)} />
+                <TextField id="r-cp" label={t.cp} value={rec.cp} onInput={(v) => setR('cp', v)} />
+              </div>
+              <div class="form-grid">
+                <TextField id="r-phone" label={t.phone} value={rec.phone} onInput={(v) => setR('phone', v)} type="tel" hint={t.phoneHint} />
+                <TextField id="r-notes" label={t.notes} value={rec.notes} onInput={(v) => setR('notes', v)} />
+              </div>
+              <div class="btn-row" style="justify-content:space-between">
+                <div style="width:120px">
+                  <TextField id="r-pk" label={t.packages} value={rec.packages} onInput={(v) => setR('packages', v)} type="number" />
+                </div>
+                <button type="button" class="btn btn-sm btn-ghost btn-danger" onClick={() => setRec(EMPTY_RECIPIENT)}>
+                  <Trash2 aria-hidden="true" />
+                  {lang === 'es' ? 'Vaciar' : 'Clear'}
+                </button>
+              </div>
             </div>
           ) : (
             <div class="stack">
@@ -313,7 +331,7 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
                 rows={8}
                 value={bulkText}
                 onInput={(e) => setBulkText(e.currentTarget.value)}
-                placeholder={'Juan Pérez; Belgrano 450; Morón; Buenos Aires; 1708; 11 4444-0000; PED-124; 1\nAna Ruiz; San Martín 99; Córdoba; Córdoba; 5000; 351 555-0000; PED-125; 2'}
+                placeholder={'00124; Juan Pérez; Belgrano 450; PB; Centro; Morón; 1708; 1144440000; ; 1\n00125; Ana Ruiz; San Martín 99; 2 A; Nueva Córdoba; Córdoba; 5000; 3515550000; Portero 2A; 2'}
               />
             </div>
           )}
@@ -321,164 +339,425 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
       </div>
 
       <div class="stack sticky">
-        <section class="panel">
-          <div class="panel-head-row">
-            <h2 class="panel-title" style="margin:0">
-              {t.preview} <span class="badge">{t.labels(labels.length)}</span>
-            </h2>
-            <button type="button" class="btn btn-primary" disabled={!labels.length} onClick={() => setPrinting(true)}>
-              <Printer aria-hidden="true" />
-              {t.print}
-            </button>
-          </div>
-          <div class="stack">
-            <div class="field">
-              <span class="label">{t.format}</span>
-              <Segmented
-                value={prefs.format}
-                onChange={(v) => setPrefs({ format: v })}
-                options={[
-                  { value: 'thermal', label: t.thermal },
-                  { value: 'a4', label: t.a4 },
-                ]}
-              />
+        <section class="panel stack">
+          <div class="field">
+            <span class="label">{t.format}</span>
+            <div class="segmented">
+              {(Object.keys(t.formats) as Format[]).map((f) => (
+                <button type="button" key={f} aria-pressed={format === f} onClick={() => setP('format', f)}>
+                  {t.formats[f]}
+                </button>
+              ))}
             </div>
-            {labels.length === 0 ? (
-              <p class="muted">{t.noLabels}</p>
-            ) : (
-              <div class="label-preview">
-                {labels.slice(0, PREVIEW_MAX).map((l, i) => (
-                  <div class="label-scale" key={i}>
-                    <Label sender={sender} r={l.r} n={l.n} total={l.total} t={t} />
-                  </div>
-                ))}
-                {labels.length > PREVIEW_MAX && <p class="hint">{t.more(labels.length - PREVIEW_MAX)}</p>}
-              </div>
-            )}
-            <span class="hint">{t.printTip}</span>
           </div>
+
+          <div class="form-grid">
+            <Field label={t.date} htmlFor="ship-date">
+              <input id="ship-date" class="input" type="date" value={date} onInput={(e) => setDate(e.currentTarget.value)} />
+            </Field>
+            {isA4(format) && (
+              <Field label={t.position} htmlFor="ship-pos" hint={t.positionHint}>
+                <select id="ship-pos" class="select" value={pos} onChange={(e) => setP('pos', Number(e.currentTarget.value))}>
+                  {Array.from({ length: perSheet }, (_, i) => (
+                    <option key={i} value={i + 1}>
+                      {i + 1}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {format === 'zpl' && (
+              <>
+                <Field label={t.zplSize} htmlFor="zpl-size">
+                  <select id="zpl-size" class="select" value={prefs.zplSize} onChange={(e) => setP('zplSize', e.currentTarget.value as LabelSize)}>
+                    <option value="10x15">10×15 cm</option>
+                    <option value="8x14">8×14 cm</option>
+                  </select>
+                </Field>
+                <Field label={t.dpi} htmlFor="zpl-dpi">
+                  <select id="zpl-dpi" class="select" value={prefs.dpi} onChange={(e) => setP('dpi', Number(e.currentTarget.value))}>
+                    {[152, 203, 300, 600].map((d) => (
+                      <option key={d} value={d}>
+                        {d} dpi
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            )}
+          </div>
+
+          <div class="panel-head-row" style="margin:0">
+            <span class="label">
+              {t.preview} <span class="badge">{t.labels(items.length)}</span>
+              {isA4(format) && items.length > 0 && <span class="badge" style="margin-left:4px">{t.sheets(sheets.length)}</span>}
+            </span>
+            {format === 'zpl' ? (
+              <button type="button" class="btn btn-primary" disabled={!zpl} onClick={() => downloadText(zpl, `etiquetas-${date}-${prefs.zplSize}-${prefs.dpi}dpi.zpl`)}>
+                <Download aria-hidden="true" />
+                {t.downloadZpl}
+              </button>
+            ) : (
+              <button type="button" class="btn btn-primary" disabled={!items.length} onClick={() => setPrinting(true)}>
+                <Printer aria-hidden="true" />
+                {t.print}
+              </button>
+            )}
+          </div>
+
+          {items.length === 0 ? (
+            <p class="muted">{t.noLabels}</p>
+          ) : isA4(format) ? (
+            <Scaled widthMm={297} heightMm={210}>
+              <Sheet slots={sheets[0]} size={size} render={label} />
+            </Scaled>
+          ) : (
+            <div class="stack">
+              {items.slice(0, 2).map((item, i) => (
+                <Scaled key={i} widthMm={lw} heightMm={lh} max={1}>
+                  <div class="lb-page" style={{ width: `${lw}mm`, height: `${lh}mm` }}>
+                    {label(item)}
+                  </div>
+                </Scaled>
+              ))}
+              {items.length > 2 && <p class="hint">{t.more(items.length - 2)}</p>}
+            </div>
+          )}
+
+          {format === 'zpl' && zpl && (
+            <div class="stack" style="gap:8px">
+              <span class="hint">{t.zplApprox}</span>
+              <textarea class="textarea mono" rows={6} readOnly value={zpl} aria-label="ZPL" style="min-height:120px;font-size:12px" />
+              <div class="btn-row">
+                <CopyButton lang={lang} text={zpl} />
+              </div>
+              <span class="hint">{t.zplTip}</span>
+            </div>
+          )}
+          {format !== 'zpl' && <span class="hint">{t.printTip}</span>}
         </section>
       </div>
 
       {printing &&
         createPortal(
           <div class="print-root">
-            {sheets.map((sheet, i) => (
-              <div class={prefs.format === 'thermal' ? 'print-page thermal' : 'print-page a4'} key={i}>
-                {sheet.map((l, j) => (
-                  <Label key={j} sender={sender} r={l.r} n={l.n} total={l.total} t={t} />
+            {isA4(format)
+              ? sheets.map((slots, i) => <Sheet key={i} slots={slots} size={size} render={label} />)
+              : items.map((item, i) => (
+                  <div key={i} class="lb-page" style={{ width: `${lw}mm`, height: `${lh}mm` }}>
+                    {label(item)}
+                  </div>
                 ))}
-              </div>
-            ))}
           </div>,
           document.body,
         )}
 
-      <style>{LABEL_CSS}</style>
+      <style>{CSS}</style>
     </div>
   );
 }
 
-function Label({ sender, r, n, total, t }: { sender: Sender; r: Recipient; n: number; total: number; t: (typeof T)['es'] }) {
-  const cityLine = [r.city, r.province].filter(Boolean).join(', ');
-  const senderLine = [sender.address, [sender.city, sender.cp && `${t.cpShort} ${sender.cp}`].filter(Boolean).join(' ')].filter(Boolean).join(' · ');
+function TextField(props: { id: string; label: string; value: string; onInput: (v: string) => void; type?: 'text' | 'tel' | 'number'; hint?: string }) {
   return (
-    <div class="ship-label">
-      <div class="sl-from">
-        {sender.logo && <img src={sender.logo} alt="" class="sl-logo" />}
-        <div>
-          <div class="sl-cap">{t.from}</div>
-          <div class="sl-from-name">{sender.name || '—'}</div>
-          {senderLine && <div>{senderLine}</div>}
-          {sender.phone && (
-            <div>
-              {t.tel} {sender.phone}
+    <Field label={props.label} htmlFor={props.id} hint={props.hint}>
+      <input
+        id={props.id}
+        class="input"
+        type="text"
+        inputMode={props.type === 'number' ? 'numeric' : props.type === 'tel' ? 'tel' : undefined}
+        value={props.value}
+        onInput={(e) => props.onInput(e.currentTarget.value)}
+      />
+    </Field>
+  );
+}
+
+/** Muestra un bloque en milímetros reales achicado para que entre en el ancho disponible. */
+function Scaled({ widthMm, heightMm, max = 1, children }: { widthMm: number; heightMm: number; max?: number; children: ComponentChildren }) {
+  const box = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.4);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const fit = () => setScale(Math.min(max, el.clientWidth / (widthMm * MM)));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [widthMm, max]);
+  return (
+    <div ref={box} class="lb-scaled" style={{ height: `${heightMm * MM * scale}px` }}>
+      <div style={{ width: `${widthMm}mm`, height: `${heightMm}mm`, transform: `scale(${scale})`, transformOrigin: 'top left' }}>{children}</div>
+    </div>
+  );
+}
+
+function Sheet({ slots, size, render }: { slots: (LabelItem | null)[]; size: LabelSize; render: (item: LabelItem) => ComponentChildren }) {
+  const [w, h] = SIZE_MM[size];
+  const perSheet = size === '8x14' ? 3 : 2;
+  const filled = [...slots, ...Array(perSheet - slots.length).fill(null)];
+  return (
+    <div class="lb-sheet lb-page">
+      {filled.map((item, i) => (
+        <div key={i} class={`lb-slot ${item ? '' : 'is-empty'}`} style={{ width: `${w}mm`, height: `${h}mm` }}>
+          {item && render(item)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+interface LabelProps {
+  item: LabelItem;
+  s: Sender;
+  date: string;
+  size: LabelSize;
+  lang: Lang;
+  w: Words;
+}
+
+const Qr = ({ text, class: cls }: { text: string; class: string }) => <div class={cls} dangerouslySetInnerHTML={{ __html: qrSvg(text) }} />;
+
+/** Plantilla para hoja A4 (diseño de plaquitas.online). */
+function SheetLabel({ item: { r, n, total }, s, date, size, lang, w }: LabelProps) {
+  const sl = senderLine(s);
+  const wa = whatsappLink(r.phone);
+  const area = [r.barrio && ['barrio', r.barrio], r.city && ['city', r.city]].filter(Boolean) as [keyof Words, string][];
+  return (
+    <div class={`lb lb-nl s${size}`}>
+      <div class="h">
+        <div class="logo">{s.logo ? <img src={s.logo} alt="" /> : <b>{s.business}</b>}</div>
+        {r.order && (
+          <div class="ped">
+            {w.order}
+            <br />
+            <b>{r.order}</b>
+          </div>
+        )}
+      </div>
+      <div class="tag">
+        <span>{total > 1 ? `${w.pkg} ${n}/${total}` : w.shipping}</span>
+        <span>{date}</span>
+      </div>
+      {sl && (
+        <div class="rem">
+          <span class="rot">{w.sender}</span> {sl}
+        </div>
+      )}
+      <div class="dv" />
+      <div class="qr">
+        <Qr class="qb" text={addressText(s, r, lang)} />
+        <div class="cpx">
+          {r.cp && (
+            <div class="cp">
+              CP <b>{r.cp}</b>
             </div>
           )}
+          {r.barrio && <div class="bar">{r.barrio}</div>}
+          {r.city && <div class="loc">{r.city}</div>}
+          <div class="qh">← {w.addrQr}</div>
         </div>
       </div>
-      <div class="sl-to">
-        <div class="sl-cap">{t.to}</div>
-        <div class="sl-to-name">{r.name}</div>
-        {r.address && <div class="sl-addr">{r.address}</div>}
-        {cityLine && <div class="sl-addr">{cityLine}</div>}
-        {r.cp && (
-          <div class="sl-cp">
-            {t.cpShort} {r.cp}
+      <div class="dv" />
+      <div class="dest">
+        <span class="rot">{w.recipient}</span>
+        <div class="dn">{r.name}</div>
+        {(r.street || r.floor) && (
+          <div class="dl">
+            {r.street}
+            {r.floor && ` · ${w.floor}: ${r.floor}`}
+          </div>
+        )}
+        {area.length > 0 && (
+          <div class="dl">
+            {area.map(([k, v], i) => (
+              <span key={k}>
+                {i > 0 && '  ·  '}
+                <b>{w[k]}:</b> {v}
+              </span>
+            ))}
           </div>
         )}
         {r.phone && (
-          <div class="sl-phone">
-            {t.tel} {r.phone}
+          <div class="dl">
+            {w.tel} {r.phone}
           </div>
         )}
       </div>
-      <div class="sl-meta">
-        <span>
-          {t.pkg} <b>{n}</b> {t.of} <b>{total}</b>
-        </span>
-        {r.weight && <span>{r.weight} kg</span>}
-        {r.fragile && <span class="sl-fragile">{t.fragile.toUpperCase()}</span>}
-      </div>
-      {r.order && (
-        <div class="sl-barcode">
-          <Barcode value={r.order} />
+      {r.notes && (
+        <div class="ind">
+          <span class="rot">{w.notes}</span> {r.notes}
         </div>
       )}
-      {r.notes && <div class="sl-notes">{r.notes}</div>}
+      {wa && (
+        <div class="wa">
+          <Qr class="qb" text={wa} />
+          <div class="wx">
+            <b>{w.waClient}</b>
+            <br />
+            {r.phone}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Barcode({ value }: { value: string }) {
-  const ref = useRef<SVGSVGElement>(null);
-  useEffect(() => {
-    if (!ref.current) return;
-    try {
-      JsBarcode(ref.current, value, { format: 'CODE128', height: 64, margin: 0, fontSize: 14, width: 2, background: 'transparent' });
-    } catch {
-      ref.current.innerHTML = '';
-    }
-  }, [value]);
-  return <svg ref={ref} />;
+/** Plantilla para impresora térmica (diseño de plaquitas.online, con el remitente completo). */
+function ThermalLabel({ item: { r, n, total }, s, date, size, lang, w }: LabelProps) {
+  const sl = senderLine(s);
+  const wa = whatsappLink(r.phone);
+  return (
+    <div class={`lb lb-tl s${size}`}>
+      <div class="sec">
+        <div class="nm">
+          {s.logo && <img src={s.logo} alt="" />}
+          <b>{s.business}</b>
+        </div>
+        {r.order && (
+          <div class="ped">
+            {w.order} <b>{r.order}</b>
+          </div>
+        )}
+        {sl && (
+          <div class="sm">
+            {w.sender}: {sl}
+          </div>
+        )}
+      </div>
+      <div class="row">
+        <div>{total > 1 ? `${w.pkg} ${n}/${total}` : w.shipping}</div>
+        <div>{date}</div>
+      </div>
+      <div class="qr">
+        <Qr class="qb" text={addressText(s, r, lang)} />
+        {r.cp && (
+          <div class="cp">
+            CP: <b>{r.cp}</b>
+          </div>
+        )}
+        {(r.barrio || r.city) && <div class="bl">{[r.barrio, r.city].filter(Boolean).join(' · ')}</div>}
+      </div>
+      <div class="dest">
+        {r.street && (
+          <div>
+            <span class="k">{w.address}:</span> {r.street}
+          </div>
+        )}
+        {r.floor && (
+          <div>
+            <span class="k">{w.floor}:</span> {r.floor}
+          </div>
+        )}
+        {r.notes && (
+          <div>
+            <span class="k">{w.ref}:</span> {r.notes}
+          </div>
+        )}
+        <div class="dd">
+          <span class="k">{w.recipient}:</span> <b>{r.name}</b>
+        </div>
+      </div>
+      {wa && (
+        <div class="wa">
+          <Qr class="qb" text={wa} />
+          <div class="wx">
+            <b>{w.waClient}</b>
+            <br />
+            {r.phone}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-const LABEL_CSS = `
+const CSS = `
   .panel-head-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
-  .logo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .logo-preview { height: 40px; width: auto; border-radius: 6px; background: #fff; padding: 3px; border: 1px solid var(--border); }
-  .label-preview { display: flex; flex-direction: column; align-items: center; gap: 14px; max-height: 720px; overflow: auto; padding: 4px; }
-  .label-scale { width: 100%; max-width: 100mm; }
-  .label-scale .ship-label { box-shadow: var(--shadow); border-radius: 6px; width: 100%; height: auto; aspect-ratio: 2 / 3; }
-
-  .ship-label {
-    background: #fff; color: #000; width: 100mm; height: 150mm; padding: 5mm;
-    display: flex; flex-direction: column; gap: 3.5mm; font-family: Arial, Helvetica, sans-serif;
-    font-size: 9pt; line-height: 1.3; overflow: hidden; border: 0.3mm solid #000;
+  .grid-3 { display: grid; gap: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  @media (max-width: 520px) { .grid-3 { grid-template-columns: 1fr 1fr; } }
+  .logo-row { display: flex; align-items: center; gap: 12px; }
+  .logo-prev {
+    width: 56px; height: 56px; flex: none; display: grid; place-items: center; overflow: hidden;
+    border: 1.5px dashed var(--border-strong); border-radius: 10px; background: #fff; color: #94a3b8;
   }
-  .sl-cap { font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1mm; }
-  .sl-from { display: flex; gap: 3mm; align-items: flex-start; padding-bottom: 3mm; border-bottom: 0.4mm solid #000; }
-  .sl-logo { max-height: 14mm; max-width: 26mm; object-fit: contain; }
-  .sl-from-name { font-weight: 700; font-size: 10pt; }
-  .sl-to { flex: 1; display: flex; flex-direction: column; gap: 0.8mm; }
-  .sl-to-name { font-size: 17pt; font-weight: 800; line-height: 1.15; margin-bottom: 1mm; overflow-wrap: anywhere; }
-  .sl-addr { font-size: 12pt; }
-  .sl-cp { font-size: 20pt; font-weight: 800; margin-top: 1.5mm; }
-  .sl-phone { font-size: 11pt; }
-  .sl-meta { display: flex; gap: 4mm; align-items: center; justify-content: space-between; border-top: 0.4mm solid #000; padding-top: 2.5mm; font-size: 11pt; }
-  .sl-fragile { border: 0.5mm solid #000; padding: 0.5mm 2mm; font-weight: 800; letter-spacing: .06em; }
-  .sl-barcode { display: flex; justify-content: center; }
-  .sl-barcode svg { max-width: 100%; height: auto; }
-  .sl-notes { font-size: 9pt; border: 0.3mm dashed #000; padding: 1.5mm 2mm; }
+  .logo-prev img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .logo-prev svg { width: 22px; height: 22px; }
+  .lb-scaled { width: 100%; overflow: hidden; }
+  .lb-scaled > div { box-shadow: var(--shadow); }
+
+  .lb-sheet { width: 297mm; height: 210mm; background: #fff; padding: 6mm; display: flex; gap: 5mm; align-items: flex-start; }
+  .lb-slot { flex: none; }
+  .lb-slot.is-empty { border: 1px dashed #d4d4d8; border-radius: 1mm; }
+  .lb-page { background: #fff; overflow: hidden; }
+
+  .lb { width: 100%; height: 100%; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; overflow: hidden; line-height: 1.25; }
+  .lb * { box-sizing: border-box; }
+  .lb .qb svg { display: block; width: 100%; height: 100%; }
+  .lb .rot { font-size: 7pt; color: #555; text-transform: uppercase; letter-spacing: .3px; display: block; }
+  .lb .dv { border-top: 1px dashed #999; margin: 2mm 0; }
+  .lb .wx { font-size: 9.5pt; line-height: 1.3; }
+  .lb .wx b { font-size: 10pt; }
+
+  .lb-nl { border: 1.5px solid #111; border-radius: 1mm; padding: 3.5mm 4mm; display: flex; flex-direction: column; }
+  .lb-nl .h { display: flex; justify-content: space-between; align-items: center; gap: 3mm; }
+  .lb-nl .logo { min-width: 0; }
+  .lb-nl .logo img { max-height: 15mm; max-width: 46mm; object-fit: contain; display: block; }
+  .lb-nl .logo b { font-size: 15pt; overflow-wrap: anywhere; }
+  .lb-nl .ped { text-align: right; font-size: 7pt; line-height: 1.15; flex: none; }
+  .lb-nl .ped b { font-size: 13.5pt; white-space: nowrap; }
+  .lb-nl .tag { display: flex; border: 1.3px solid #111; border-radius: .6mm; margin-top: 2mm; font-weight: bold; }
+  .lb-nl .tag span { flex: 1; text-align: center; padding: 1.4mm; font-size: 12pt; }
+  .lb-nl .tag span:first-child { border-right: 1.3px solid #111; }
+  .lb-nl .rem { font-size: 7.5pt; line-height: 1.3; margin-top: 2mm; }
+  .lb-nl .rem .rot { display: inline; margin-right: 1mm; }
+  .lb-nl .qr { display: flex; align-items: center; gap: 2.5mm; }
+  .lb-nl .qr .qb { width: 30mm; height: 30mm; flex: none; }
+  .lb-nl .cpx { min-width: 0; }
+  .lb-nl .cpx .cp { font-size: 12pt; }
+  .lb-nl .cpx .cp b { font-size: 22pt; }
+  .lb-nl .cpx .bar { font-weight: bold; font-size: 16pt; line-height: 1.05; overflow-wrap: anywhere; }
+  .lb-nl .cpx .loc { font-weight: bold; font-size: 13pt; }
+  .lb-nl .cpx .qh { font-size: 7pt; color: #777; margin-top: 1mm; }
+  .lb-nl .dest { margin-top: .5mm; }
+  .lb-nl .dn { font-size: 17pt; font-weight: bold; line-height: 1.1; overflow-wrap: anywhere; }
+  .lb-nl .dl { font-size: 11.5pt; line-height: 1.4; }
+  .lb-nl .ind { margin-top: 2mm; font-size: 10pt; line-height: 1.3; }
+  .lb-nl .ind .rot { margin-bottom: .3mm; }
+  .lb-nl .wa { margin-top: auto; display: flex; align-items: center; gap: 2.5mm; border-top: 1px dashed #999; padding-top: 2mm; }
+  .lb-nl .wa .qb { width: 16mm; height: 16mm; flex: none; }
+  .lb-nl.s10x15 .qr .qb { width: 36mm; height: 36mm; }
+  .lb-nl.s10x15 .dn { font-size: 19pt; }
+  .lb-nl.s10x15 .wa .qb { width: 18mm; height: 18mm; }
+
+  .lb-tl { border: 1.5px solid #111; display: flex; flex-direction: column; }
+  .lb-tl .sec { padding: 2mm 3mm; border-bottom: 1.5px solid #111; }
+  .lb-tl .nm { font-size: 13pt; font-weight: bold; display: flex; align-items: center; gap: 2mm; }
+  .lb-tl .nm img { max-height: 9mm; max-width: 34mm; object-fit: contain; }
+  .lb-tl .ped { font-size: 13pt; font-weight: bold; margin-top: .5mm; }
+  .lb-tl .sm { font-size: 7.5pt; color: #333; margin-top: .5mm; line-height: 1.25; }
+  .lb-tl .row { display: flex; border-bottom: 1.5px solid #111; }
+  .lb-tl .row div { flex: 1; text-align: center; padding: 2mm; font-size: 15pt; font-weight: bold; }
+  .lb-tl .row div:first-child { border-right: 1.5px solid #111; }
+  .lb-tl .qr { text-align: center; padding: 2mm 0 1.5mm; border-bottom: 1.5px solid #111; }
+  .lb-tl .qr .qb { width: 40mm; height: 40mm; margin: 0 auto; }
+  .lb-tl .qr .cp { font-size: 12pt; margin-top: 1mm; }
+  .lb-tl .qr .cp b { font-size: 26pt; }
+  .lb-tl .qr .bl { font-size: 14pt; font-weight: bold; letter-spacing: .3px; }
+  .lb-tl .dest { padding: 1.5mm 3mm; font-size: 10pt; line-height: 1.4; flex: 1; overflow: hidden; }
+  .lb-tl .k { font-weight: bold; }
+  .lb-tl .dd { margin-top: .5mm; font-size: 11.5pt; }
+  .lb-tl .wa { display: flex; align-items: center; gap: 2.5mm; padding: 2mm 3mm; border-top: 1.5px solid #111; }
+  .lb-tl .wa .qb { width: 15mm; height: 15mm; flex: none; }
+  .lb-tl.s8x14 .qr .qb { width: 34mm; height: 34mm; }
+  .lb-tl.s8x14 .row div { font-size: 13pt; }
+  .lb-tl.s8x14 .qr .cp b { font-size: 22pt; }
 
   .print-root { display: none; }
   @media print {
-    .print-page { break-after: page; page-break-after: always; overflow: hidden; }
-    .print-page:last-child { break-after: auto; page-break-after: auto; }
-    .print-page.thermal { width: 100mm; height: 150mm; }
-    .print-page.thermal .ship-label { border: 0; }
-    .print-page.a4 { width: 210mm; height: 297mm; display: grid; grid-template-columns: 105mm 105mm; grid-template-rows: 148.5mm 148.5mm; }
-    .print-page.a4 .ship-label { width: 105mm; height: 148.5mm; border: 0.2mm dashed #999; }
-    .ship-label { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .print-root .lb-page { break-after: page; page-break-after: always; box-shadow: none; }
+    .print-root .lb-page:last-child { break-after: auto; page-break-after: auto; }
+    .print-root .lb-slot.is-empty { border: 0; }
+    .lb { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   }
 `;

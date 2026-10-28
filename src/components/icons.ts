@@ -1,5 +1,5 @@
 import {
-  ArrowLeftRight, Barcode, Binary, Braces, Calculator, CaseSensitive, CircleDollarSign, ClipboardList, Combine,
+  ArrowLeftRight, Barcode, Box, Binary, Braces, Calculator, CaseSensitive, CircleDollarSign, ClipboardList, Combine,
   FileImage, FileText, Files, Fingerprint, HandCoins, IdCard, Image, KeyRound, MessageCircle, Minimize2,
   PackageCheck, Percent, QrCode, Receipt, Ruler, ScanBarcode, Scaling, Scissors, Sparkles, Store, Table, Truck,
   Type, WholeWord,
@@ -7,7 +7,7 @@ import {
 
 /** Íconos que se pueden nombrar desde el registro de herramientas (src/data/tools.ts). */
 export const ICONS = {
-  ArrowLeftRight, Barcode, Binary, Braces, Calculator, CaseSensitive, CircleDollarSign, ClipboardList, Combine,
+  ArrowLeftRight, Barcode, Box, Binary, Braces, Calculator, CaseSensitive, CircleDollarSign, ClipboardList, Combine,
   FileImage, FileText, Files, Fingerprint, HandCoins, IdCard, Image, KeyRound, MessageCircle, Minimize2,
   PackageCheck, Percent, QrCode, Receipt, Ruler, ScanBarcode, Scaling, Scissors, Sparkles, Store, Table, Truck,
   Type, WholeWord,

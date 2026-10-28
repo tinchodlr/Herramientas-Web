@@ -170,7 +170,8 @@ const T = {
   },
 };
 
-const EMPTY_ISSUER: Issuer = { name: '', taxId: '', taxCondition: '', address: '', phone: '', email: '', logo: '' };
+export const DOC_WORDS = { es: T.es.words, en: T.en.words };
+export const EMPTY_ISSUER: Issuer = { name: '', taxId: '', taxCondition: '', address: '', phone: '', email: '', logo: '' };
 const CURRENCIES = ['$', 'US$', '€'];
 const today = () => {
   const d = new Date();

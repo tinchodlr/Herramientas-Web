@@ -23,6 +23,7 @@ import BarcodeGenerator from '../tools/BarcodeGenerator';
 import WhatsappLink from '../tools/WhatsappLink';
 import MlTitleGenerator from '../tools/MlTitleGenerator';
 import CsvJson from '../tools/CsvJson';
+import Print3dCalculator from '../tools/Print3dCalculator';
 
 interface Props {
   id: string;
@@ -61,3 +62,4 @@ const { id, lang } = Astro.props;
 {id === 'wa-link' && <WhatsappLink client:load lang={lang} />}
 {id === 'ml-title' && <MlTitleGenerator client:load lang={lang} />}
 {id === 'csv-json' && <CsvJson client:load lang={lang} />}
+{id === 'print3d' && <Print3dCalculator client:load lang={lang} />}

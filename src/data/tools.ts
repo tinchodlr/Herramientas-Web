@@ -549,6 +549,34 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    id: 'print3d',
+    category: 'ecommerce',
+    icon: 'Box',
+    popular: true,
+    slug: { es: 'calculadora-de-costos-impresion-3d', en: '3d-printing-cost-calculator' },
+    name: { es: 'Calculadora de costos de impresión 3D', en: '3D printing cost calculator' },
+    description: {
+      es: 'Calculá cuánto cobrar por tus impresiones 3D: filamento, electricidad, desgaste de la máquina, fallas, mano de obra y ganancia. Funciona en varias monedas, el IVA es opcional y genera el presupuesto en PDF.',
+      en: 'Work out what to charge for your 3D prints: filament, electricity, machine wear, failures, labor and profit. It works in several currencies, VAT is optional and it builds the quote as a PDF.',
+    },
+    keywords: {
+      es: 'impresion 3d costo precio filamento pla petg electricidad presupuesto cotizar piezas ganancia moneda dolar iva',
+      en: '3d printing cost price filament pla petg electricity quote estimate parts profit currency usd vat',
+    },
+    steps: {
+      es: [
+        'Cargá el precio del filamento, de la impresora y de la luz una sola vez: quedan guardados en tu navegador.',
+        'Agregá cada pieza con su peso y su tiempo de impresión, y elegí tu ganancia, la moneda y si querés sumar IVA.',
+        'Mirá el precio y el desglose, y descargá el presupuesto en PDF.',
+      ],
+      en: [
+        'Enter your filament, printer and electricity prices once: they stay in your browser.',
+        'Add each part with its weight and print time, and choose your profit, currency and whether to add VAT.',
+        'See the price and breakdown, and download the quote as a PDF.',
+      ],
+    },
+  },
+  {
     id: 'ml-title',
     category: 'ecommerce',
     icon: 'Type',

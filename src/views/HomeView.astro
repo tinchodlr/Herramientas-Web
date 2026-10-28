@@ -1,0 +1,300 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolCard from '../components/ToolCard.astro';
+import { getIcon } from '../components/icons';
+import { SITE_NAME, type Lang } from '../config';
+import { CATEGORIES, TOOLS, toolsByCategory } from '../data/tools';
+import { homePath, useT } from '../i18n/ui';
+import { Search, ShieldCheck, Zap, Gift } from 'lucide-preact';
+
+interface Props {
+  lang: Lang;
+}
+
+const { lang } = Astro.props;
+const t = useT(lang);
+---
+
+<Base
+  lang={lang}
+  title={`${SITE_NAME[lang]} · ${t('meta.homeTitle')}`}
+  description={t('meta.homeDescription')}
+  alternates={{ es: homePath('es'), en: homePath('en') }}
+>
+  <section class="hero">
+    <div class="container hero-inner">
+      <span class="badge eyebrow"><ShieldCheck aria-hidden="true" /> {t('home.eyebrow')}</span>
+      <h1>{t('home.title')}</h1>
+      <p class="hero-sub">{t('home.subtitle')}</p>
+
+      <label class="hero-search">
+        <Search aria-hidden="true" />
+        <span class="sr-only">{t('home.searchPlaceholder')}</span>
+        <input id="home-search" type="search" placeholder={t('home.searchPlaceholder')} autocomplete="off" spellcheck={false} />
+        <span class="hero-count">{TOOLS.length} {t('home.count')}</span>
+      </label>
+
+      <nav class="cat-chips" aria-label={t('nav.tools')}>
+        {CATEGORIES.map((cat) => {
+          const Icon = getIcon(cat.icon);
+          return (
+            <a href={`#${cat.anchor[lang]}`} class="cat-chip" data-cat={cat.id}>
+              <Icon aria-hidden="true" />
+              {cat.name[lang]}
+            </a>
+          );
+        })}
+      </nav>
+    </div>
+  </section>
+
+  <div class="container">
+    <p id="home-empty" class="empty" hidden>{t('home.noResults')}</p>
+
+    {CATEGORIES.map((cat) => {
+      const Icon = getIcon(cat.icon);
+      return (
+        <section class="cat-section" id={cat.anchor[lang]} data-cat={cat.id}>
+          <header class="cat-header">
+            <span class="icon-tile" style="--size:36px"><Icon aria-hidden="true" /></span>
+            <div>
+              <h2>{cat.name[lang]}</h2>
+              <p class="muted small">{cat.description[lang]}</p>
+            </div>
+          </header>
+          <div class="tool-grid">
+            {toolsByCategory(cat.id).map((tool) => <ToolCard tool={tool} lang={lang} />)}
+          </div>
+        </section>
+      );
+    })}
+
+    <section class="features">
+      <div class="feature">
+        <ShieldCheck aria-hidden="true" />
+        <div>
+          <strong>{lang === 'es' ? 'Privado de verdad' : 'Truly private'}</strong>
+          <p class="muted small">{lang === 'es' ? 'Tus archivos se procesan en tu dispositivo. No se suben a ningún servidor.' : 'Your files are processed on your device. Nothing is uploaded to a server.'}</p>
+        </div>
+      </div>
+      <div class="feature">
+        <Zap aria-hidden="true" />
+        <div>
+          <strong>{lang === 'es' ? 'Instantáneo' : 'Instant'}</strong>
+          <p class="muted small">{lang === 'es' ? 'Sin esperas de subida ni colas: los resultados aparecen mientras escribís.' : 'No upload waits or queues: results appear as you type.'}</p>
+        </div>
+      </div>
+      <div class="feature">
+        <Gift aria-hidden="true" />
+        <div>
+          <strong>{lang === 'es' ? 'Gratis y sin registro' : 'Free, no sign-up'}</strong>
+          <p class="muted small">{lang === 'es' ? 'Entrás y usás. Sin cuentas, sin límites diarios, sin marcas de agua.' : 'Just open and use. No accounts, no daily limits, no watermarks.'}</p>
+        </div>
+      </div>
+    </section>
+  </div>
+</Base>
+
+<script>
+  import { normalize } from '../lib/text';
+
+  const input = document.getElementById('home-search') as HTMLInputElement | null;
+  const empty = document.getElementById('home-empty');
+  const sections = [...document.querySelectorAll<HTMLElement>('.cat-section')];
+
+  input?.addEventListener('input', () => {
+    const words = normalize(input.value).split(/\s+/).filter(Boolean);
+    let total = 0;
+    for (const section of sections) {
+      let visible = 0;
+      section.querySelectorAll<HTMLElement>('.tool-card').forEach((card) => {
+        const match = words.every((w) => card.dataset.search!.includes(w));
+        card.hidden = !match;
+        if (match) visible++;
+      });
+      section.hidden = visible === 0;
+      total += visible;
+    }
+    if (empty) empty.hidden = total > 0;
+  });
+</script>
+
+<style>
+  .hero {
+    padding: 64px 0 40px;
+    background:
+      radial-gradient(900px 320px at 50% -60px, color-mix(in srgb, var(--accent) 12%, transparent), transparent 70%);
+  }
+
+  .hero-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 18px;
+  }
+
+  .eyebrow {
+    height: 28px;
+    padding: 0 12px;
+    background: var(--surface);
+  }
+
+  .hero h1 {
+    font-size: clamp(32px, 5.4vw, 54px);
+    font-weight: 760;
+    letter-spacing: -0.035em;
+    max-width: 16ch;
+  }
+
+  .hero-sub {
+    font-size: clamp(15.5px, 1.6vw, 18px);
+    color: var(--text-2);
+    max-width: 52ch;
+  }
+
+  .hero-search {
+    margin-top: 8px;
+    width: min(620px, 100%);
+    height: 56px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 0 16px 0 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+
+  .hero-search:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent), var(--shadow);
+  }
+
+  .hero-search :global(svg) {
+    width: 20px;
+    height: 20px;
+    color: var(--text-3);
+    flex: none;
+  }
+
+  .hero-search input {
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    font-size: 16.5px;
+  }
+
+  .hero-count {
+    font-size: 12.5px;
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  .cat-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .cat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 13.5px;
+    font-weight: 560;
+    color: var(--text-2);
+    transition: border-color 0.15s, color 0.15s;
+  }
+
+  .cat-chip :global(svg) {
+    width: 15px;
+    height: 15px;
+    color: var(--cat);
+  }
+
+  .cat-chip:hover {
+    color: var(--text);
+    border-color: color-mix(in srgb, var(--cat) 50%, var(--border));
+  }
+
+  .empty {
+    text-align: center;
+    color: var(--text-3);
+    padding: 40px 0;
+  }
+
+  .cat-section {
+    margin-top: 44px;
+  }
+
+  .cat-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .cat-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .tool-grid {
+    display: grid;
+    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  }
+
+  .features {
+    margin-top: 72px;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  }
+
+  .feature {
+    display: flex;
+    gap: 14px;
+    padding: 20px;
+    border-radius: var(--radius-lg);
+    background: var(--surface-2);
+  }
+
+  .feature :global(svg) {
+    width: 22px;
+    height: 22px;
+    color: var(--accent);
+    flex: none;
+    margin-top: 2px;
+  }
+
+  .feature strong {
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  @media (max-width: 560px) {
+    .hero {
+      padding-top: 40px;
+    }
+    .hero-count {
+      display: none;
+    }
+    .tool-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

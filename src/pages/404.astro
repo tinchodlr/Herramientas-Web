@@ -1,0 +1,38 @@
+---
+import Base from '../layouts/Base.astro';
+import { SITE_NAME } from '../config';
+import { useT } from '../i18n/ui';
+
+const t = useT('es');
+---
+
+<Base lang="es" title={`${t('notFound.title')} · ${SITE_NAME.es}`} description={t('notFound.text')} alternates={{ es: '/404/', en: '/404/' }}>
+  <div class="container not-found">
+    <p class="code">404</p>
+    <h1>{t('notFound.title')}</h1>
+    <p class="muted">{t('notFound.text')}</p>
+    <div class="btn-row">
+      <a class="btn btn-primary" href="/">{t('tool.backHome')}</a>
+      <a class="btn" href="/en/">See all tools</a>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .not-found {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 14px;
+    padding-top: 90px;
+  }
+
+  .code {
+    font-size: 72px;
+    font-weight: 800;
+    letter-spacing: -0.05em;
+    color: var(--text-3);
+    line-height: 1;
+  }
+</style>

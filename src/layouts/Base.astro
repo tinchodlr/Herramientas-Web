@@ -1,0 +1,216 @@
+---
+import '@fontsource-variable/inter';
+import '../styles/global.css';
+import { LOCALE, SITE_NAME, type Lang } from '../config';
+import { CATEGORIES, TOOLS } from '../data/tools';
+import { homePath, toolPath, useT } from '../i18n/ui';
+import Logo from '../components/Logo.astro';
+import SearchDialog from '../components/SearchDialog';
+
+interface Props {
+  lang: Lang;
+  title: string;
+  description: string;
+  /** Ruta equivalente en cada idioma, para el selector y los hreflang. */
+  alternates: Record<Lang, string>;
+}
+
+const { lang, title, description, alternates } = Astro.props;
+const t = useT(lang);
+const otherLang: Lang = lang === 'es' ? 'en' : 'es';
+const canonical = new URL(alternates[lang], Astro.site).href;
+
+const searchItems = TOOLS.map((tool) => ({
+  id: tool.id,
+  name: tool.name[lang],
+  description: tool.description[lang],
+  keywords: `${tool.keywords[lang]} ${tool.name[otherLang]}`,
+  category: tool.category,
+  categoryName: CATEGORIES.find((c) => c.id === tool.category)!.name[lang],
+  icon: tool.icon,
+  url: toolPath(tool, lang),
+}));
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" hreflang="es" href={new URL(alternates.es, Astro.site).href} />
+    <link rel="alternate" hreflang="en" href={new URL(alternates.en, Astro.site).href} />
+    <link rel="alternate" hreflang="x-default" href={new URL(alternates.es, Astro.site).href} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:site_name" content={SITE_NAME[lang]} />
+    <meta property="og:locale" content={LOCALE[lang].replace('-', '_')} />
+    <meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)" />
+    <script is:inline>
+      (() => {
+        let theme;
+        try { theme = localStorage.getItem('theme'); } catch {}
+        if (theme !== 'light' && theme !== 'dark') {
+          theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = theme;
+      })();
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href={homePath(lang)} class="brand" aria-label={SITE_NAME[lang]}>
+          <Logo />
+          <span>{SITE_NAME[lang]}</span>
+        </a>
+        <div class="header-actions">
+          <SearchDialog client:idle items={searchItems} lang={lang} />
+          <a class="btn btn-ghost btn-sm lang-switch" href={alternates[otherLang]} hreflang={otherLang} lang={otherLang} title={t('nav.language')}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+            {otherLang.toUpperCase()}
+          </a>
+          <button class="btn btn-ghost btn-sm btn-icon" id="theme-toggle" type="button" aria-label={t('nav.theme')} title={t('nav.theme')}>
+            <svg class="icon-sun" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+            <svg class="icon-moon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div class="footer-brand">
+          <a href={homePath(lang)} class="brand">
+            <Logo />
+            <span>{SITE_NAME[lang]}</span>
+          </a>
+          <p class="muted small">{t('footer.tagline')} {t('footer.privacy')}</p>
+        </div>
+        <nav class="footer-cats" aria-label={t('nav.tools')}>
+          {CATEGORIES.map((cat) => (
+            <a href={`${homePath(lang)}#${cat.anchor[lang]}`}>{cat.name[lang]}</a>
+          ))}
+        </nav>
+      </div>
+      <div class="container footer-bottom small">
+        © {new Date().getFullYear()} {SITE_NAME[lang]}
+      </div>
+    </footer>
+
+    <script>
+      document.getElementById('theme-toggle')?.addEventListener('click', () => {
+        const root = document.documentElement;
+        const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        root.dataset.theme = next;
+        try { localStorage.setItem('theme', next); } catch {}
+      });
+    </script>
+  </body>
+</html>
+
+<style>
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(1.6) blur(14px);
+    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .header-inner {
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+  }
+
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .lang-switch {
+    font-weight: 650;
+    letter-spacing: 0.02em;
+  }
+
+  :global([data-theme='dark']) .icon-sun,
+  :global([data-theme='light']) .icon-moon {
+    display: none;
+  }
+
+  .site-footer {
+    margin-top: 80px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 28px;
+    padding-top: 36px;
+    padding-bottom: 28px;
+  }
+
+  .footer-brand {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 380px;
+  }
+
+  .footer-cats {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 8px 32px;
+    font-size: 14px;
+    color: var(--text-2);
+    align-content: start;
+  }
+
+  .footer-cats a:hover {
+    color: var(--text);
+  }
+
+  .footer-bottom {
+    padding-bottom: 28px;
+    color: var(--text-3);
+  }
+
+  @media (max-width: 560px) {
+    .brand span {
+      display: none;
+    }
+    .footer-brand .brand span {
+      display: inline;
+    }
+  }
+</style>

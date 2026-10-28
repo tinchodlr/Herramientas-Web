@@ -1,0 +1,68 @@
+---
+import type { Lang } from '../config';
+import type { Tool } from '../data/tools';
+import { toolPath } from '../i18n/ui';
+import { normalize } from '../lib/text';
+import { getIcon } from './icons';
+
+interface Props {
+  tool: Tool;
+  lang: Lang;
+}
+
+const { tool, lang } = Astro.props;
+const Icon = getIcon(tool.icon);
+const other: Lang = lang === 'es' ? 'en' : 'es';
+const search = normalize(`${tool.name[lang]} ${tool.keywords[lang]} ${tool.name[other]} ${tool.description[lang]}`);
+---
+
+<a class="tool-card" href={toolPath(tool, lang)} data-cat={tool.category} data-search={search}>
+  <span class="icon-tile"><Icon aria-hidden="true" /></span>
+  <span class="tool-card-body">
+    <span class="tool-card-name">{tool.name[lang]}</span>
+    <span class="tool-card-desc">{tool.description[lang]}</span>
+  </span>
+</a>
+
+<style>
+  .tool-card {
+    display: flex;
+    gap: 14px;
+    padding: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+    min-width: 0;
+  }
+
+  .tool-card:hover {
+    border-color: color-mix(in srgb, var(--cat) 45%, var(--border));
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+  }
+
+  .tool-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .tool-card-name {
+    font-weight: 640;
+    font-size: 15px;
+    letter-spacing: -0.01em;
+    line-height: 1.3;
+  }
+
+  .tool-card-desc {
+    font-size: 13.5px;
+    color: var(--text-2);
+    line-height: 1.45;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+</style>

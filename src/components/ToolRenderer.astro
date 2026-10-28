@@ -1,0 +1,49 @@
+---
+import type { Lang } from '../config';
+import MlCalculator from '../tools/MlCalculator';
+import SkuGenerator from '../tools/SkuGenerator';
+import ShippingLabels from '../tools/ShippingLabels';
+import QrGenerator from '../tools/QrGenerator';
+import PasswordGenerator from '../tools/PasswordGenerator';
+import UuidGenerator from '../tools/UuidGenerator';
+import PercentCalculator from '../tools/PercentCalculator';
+import IvaCalculator from '../tools/IvaCalculator';
+import UnitConverter from '../tools/UnitConverter';
+import ImageConverter from '../tools/ImageConverter';
+import PdfMerge from '../tools/PdfMerge';
+import PdfSplit from '../tools/PdfSplit';
+import ImagesToPdf from '../tools/ImagesToPdf';
+import JsonFormatter from '../tools/JsonFormatter';
+import Base64Tool from '../tools/Base64Tool';
+import WordCounter from '../tools/WordCounter';
+import CaseConverter from '../tools/CaseConverter';
+
+interface Props {
+  id: string;
+  lang: Lang;
+}
+
+// Cada isla se importa de forma estática para que Astro genere un bundle por herramienta
+// y solo cargue el JavaScript de la que se está mostrando.
+const { id, lang } = Astro.props;
+---
+
+{id === 'ml-calc' && <MlCalculator client:load lang={lang} />}
+{id === 'sku' && <SkuGenerator client:load lang={lang} />}
+{id === 'shipping-label' && <ShippingLabels client:load lang={lang} />}
+{id === 'qr' && <QrGenerator client:load lang={lang} />}
+{id === 'password' && <PasswordGenerator client:load lang={lang} />}
+{id === 'uuid' && <UuidGenerator client:load lang={lang} />}
+{id === 'percent' && <PercentCalculator client:load lang={lang} />}
+{id === 'iva' && <IvaCalculator client:load lang={lang} />}
+{id === 'units' && <UnitConverter client:load lang={lang} />}
+{id === 'webp' && <ImageConverter client:load lang={lang} preset="webp" />}
+{id === 'img-compress' && <ImageConverter client:load lang={lang} preset="compress" />}
+{id === 'img-resize' && <ImageConverter client:load lang={lang} preset="resize" />}
+{id === 'pdf-merge' && <PdfMerge client:load lang={lang} />}
+{id === 'pdf-split' && <PdfSplit client:load lang={lang} />}
+{id === 'img-to-pdf' && <ImagesToPdf client:load lang={lang} />}
+{id === 'json' && <JsonFormatter client:load lang={lang} />}
+{id === 'base64' && <Base64Tool client:load lang={lang} />}
+{id === 'word-count' && <WordCounter client:load lang={lang} />}
+{id === 'case' && <CaseConverter client:load lang={lang} />}

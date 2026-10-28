@@ -1,0 +1,30 @@
+{
+  "name": "herramientas-web",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "empaquetar": "astro build && node scripts/empaquetar.mjs"
+  },
+  "dependencies": {
+    "@astrojs/preact": "^6.1.1",
+    "@astrojs/sitemap": "^3.7.4",
+    "@fontsource-variable/inter": "^5.3.0",
+    "astro": "^7.4.2",
+    "fflate": "^0.8.3",
+    "jsbarcode": "^3.12.3",
+    "lucide-preact": "^1.63.0",
+    "pdf-lib": "^1.17.1",
+    "preact": "^11.1.0",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@types/qrcode": "^1.5.6",
+    "typescript": "^6.0.3"
+  }
+}

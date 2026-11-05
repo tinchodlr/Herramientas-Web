@@ -900,7 +900,7 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
           <div>
             <h2 class="panel-title" style="margin:0 0 2px">{t.historyTitle}</h2>
             <span class="hint">{t.historyHint}</span>
-            <span class="hint">
+            <span class="hint" style="display:block;margin-top:4px">
               {history.loggedIn ? (
                 t.cloud
               ) : (

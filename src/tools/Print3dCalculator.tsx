@@ -14,7 +14,7 @@ import { fmtDate, type DocData, type Issuer } from './documents/pdf';
 const T = {
   es: {
     parts: 'Piezas a imprimir',
-    savedJobs: 'Trabajos guardados',
+    savedJobs: 'Piezas guardadas',
     savedProfiles: 'Perfiles de impresión (costos y parámetros)',
     partName: 'Nombre de la pieza',
     grams: 'Peso (g)',
@@ -136,7 +136,7 @@ const T = {
   },
   en: {
     parts: 'Parts to print',
-    savedJobs: 'Saved jobs',
+    savedJobs: 'Saved parts',
     savedProfiles: 'Printing profiles (costs and parameters)',
     partName: 'Part name',
     grams: 'Weight (g)',
@@ -464,6 +464,14 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               {t.example}
             </button>
           </div>
+          <LibraryBar
+            col="p3d-jobs"
+            lang={lang}
+            title={t.savedJobs}
+            getData={() => ({ parts })}
+            onLoad={(d) => setParts(d.parts?.length ? d.parts.map((p) => newPart({ ...p })) : [newPart()])}
+            suggestName={() => parts.find((p) => p.name.trim())?.name.trim() ?? ''}
+          />
           {parts.map((p, i) => (
             <div class="p3-part" key={p.id}>
               <div class="p3-name">

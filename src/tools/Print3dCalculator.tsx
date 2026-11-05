@@ -4,6 +4,7 @@ import { Field, NumInput, Segmented, downloadBlob, fmtNum, parseNum, useStoredSt
 import { LogoPicker } from './shared/LogoPicker';
 import { LibraryBar, useLibrary } from './shared/Library';
 import { openLogin } from '../lib/cloud';
+import { fetchDollar, type Dollar, type Quote } from '../lib/dolar';
 import { EMPTY_HANDOFF_CLIENT, addressLine, sendHandoff, type HandoffClient } from '../lib/handoff';
 import { TOOLS } from '../data/tools';
 import { toolPath } from '../i18n/ui';
@@ -54,6 +55,13 @@ const T = {
     converted: (amount: string) => `≈ ${amount} al cambio cargado`,
     rateMissing: 'Cargá la cotización para convertir los importes en otra moneda.',
     rateDate: 'Cotización del día',
+    getRate: 'Traer la cotización de hoy',
+    gettingRate: 'Consultando…',
+    useRate: 'Usar el valor de venta:',
+    rateOfficial: 'Dólar oficial',
+    rateBlue: 'Dólar blue',
+    rateSource: (when: string) => `Actualizada ${when} · Fuente: DolarAPI.com (se consulta solo al tocar el botón).`,
+    rateFail: 'No se pudo traer la cotización. Cargala a mano.',
     rateUsed: (a: string, rate: string, b: string, date: string) => `Cotización: 1 ${a} = ${b} ${rate}${date ? ` al ${date}` : ''}`,
     equivalent: (amount: string, a: string, rate: string, b: string, date: string) => `Equivalente: ${a} ${amount} (cotización 1 ${a} = ${b} ${rate}${date ? ` al ${date}` : ''}).`,
     suppliesLine: 'Insumos y embalaje',
@@ -176,6 +184,13 @@ const T = {
     converted: (amount: string) => `≈ ${amount} at the entered rate`,
     rateMissing: 'Enter the exchange rate to convert amounts in another currency.',
     rateDate: 'Rate of the day',
+    getRate: 'Fetch today’s rate',
+    gettingRate: 'Checking…',
+    useRate: 'Use the selling price:',
+    rateOfficial: 'Official dollar',
+    rateBlue: 'Blue dollar',
+    rateSource: (when: string) => `Updated ${when} · Source: DolarAPI.com (queried only when you press the button).`,
+    rateFail: 'Could not fetch the rate. Enter it by hand.',
     rateUsed: (a: string, rate: string, b: string, date: string) => `Exchange rate: 1 ${a} = ${b} ${rate}${date ? ` on ${date}` : ''}`,
     equivalent: (amount: string, a: string, rate: string, b: string, date: string) => `Equivalent: ${a} ${amount} (rate 1 ${a} = ${b} ${rate}${date ? ` on ${date}` : ''}).`,
     suppliesLine: 'Supplies and packaging',
@@ -304,6 +319,8 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
   const [supplies, setSupplies] = useStoredState<{ items: Supply[] }>('p3d-supplies', { items: supplyList(t.defaultSupplies) });
   const [model, setModel] = useState<ModelBuy>(EMPTY_MODEL);
   const [validity, setValidity] = useStoredState('p3d-validity', '15');
+  const [dollar, setDollar] = useState<Dollar | null>(null);
+  const [dollarState, setDollarState] = useState<'idle' | 'loading' | 'error'>('idle');
   const [notes, setNotes] = useState(t.notesDefault);
   const [issuer, setIssuer] = useStoredState<Issuer>('doc-issuer', EMPTY_ISSUER);
   const [number, setNumber] = useStoredState('doc-number-quote', '0001-00000001');
@@ -332,6 +349,19 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
     return Number.isFinite(v) && v > 0 ? v * (cur === 'alt' ? (hasRate ? rate : 0) : 1) : 0;
   };
 
+  const loadDollar = async () => {
+    setDollarState('loading');
+    try {
+      setDollar(await fetchDollar());
+      setDollarState('idle');
+    } catch {
+      setDollarState('error');
+    }
+  };
+  const takeRate = (q: Quote) =>
+    setS((o) => ({ ...o, rate: String(q.sell).replace('.', lang === 'es' ? ',' : '.'), rateDate: q.updated.toLocaleDateString('sv') }));
+  const canFetchRate = s.currency === 'ARS' && s.secondCur === 'USD';
+
   /** Campos de la cotización (manual): se muestran donde haga falta, nunca dos veces. */
   const rateFields = (
     <div class="form-grid">
@@ -341,6 +371,34 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
       <Field label={t.rateDate} htmlFor="p3-rate-date">
         <input id="p3-rate-date" class="input" type="date" value={s.rateDate} onInput={(e) => set('rateDate', e.currentTarget.value)} />
       </Field>
+      {canFetchRate && (
+        <div class="stack p3-fetch" style="grid-column:1 / -1;gap:8px">
+          {!dollar ? (
+            <div>
+              <button type="button" class="btn btn-sm" disabled={dollarState === 'loading'} onClick={loadDollar}>
+                {dollarState === 'loading' ? t.gettingRate : t.getRate}
+              </button>
+            </div>
+          ) : (
+            <>
+              <span class="label">{t.useRate}</span>
+              <div class="btn-row">
+                <button type="button" class="btn btn-sm" onClick={() => takeRate(dollar.oficial)}>
+                  {t.rateOfficial} · $ {fmtNum(dollar.oficial.sell, lang, 2)}
+                </button>
+                <button type="button" class="btn btn-sm" onClick={() => takeRate(dollar.blue)}>
+                  {t.rateBlue} · $ {fmtNum(dollar.blue.sell, lang, 2)}
+                </button>
+                <button type="button" class="btn btn-sm btn-ghost" disabled={dollarState === 'loading'} onClick={loadDollar}>
+                  {dollarState === 'loading' ? t.gettingRate : '↻'}
+                </button>
+              </div>
+              <span class="hint">{t.rateSource(`${dollar.blue.updated.toLocaleDateString(lang === 'es' ? 'es-AR' : 'en-US')} ${dollar.blue.updated.toLocaleTimeString(lang === 'es' ? 'es-AR' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`)}</span>
+            </>
+          )}
+          {dollarState === 'error' && <div class="alert alert-warning">{t.rateFail}</div>}
+        </div>
+      )}
     </div>
   );
   const hasData = r.priceNet > 0;

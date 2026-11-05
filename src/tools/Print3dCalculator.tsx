@@ -447,10 +447,19 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
     return rec;
   };
 
-  const printQuote = async (doc: DocData) => {
-    const { buildDocumentPdf } = await import('./documents/pdf');
-    const bytes = await buildDocumentPdf(doc, issuer, lang, DOC_WORDS[lang]);
-    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${DOC_WORDS[lang].title.quote}-${doc.number}.pdf`.replace(/[^\w.\-]+/g, '_'));
+  /** Descarga el PDF, o lo abre en una pestaña nueva (se abre antes de armarlo para que no lo bloquee el navegador). */
+  const printQuote = async (doc: DocData, openInTab = false) => {
+    const tab = openInTab ? window.open('', '_blank') : null;
+    try {
+      const { buildDocumentPdf } = await import('./documents/pdf');
+      const bytes = await buildDocumentPdf(doc, issuer, lang, DOC_WORDS[lang]);
+      const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' });
+      if (tab) tab.location.href = URL.createObjectURL(blob);
+      else downloadBlob(blob, `${DOC_WORDS[lang].title.quote}-${doc.number}.pdf`.replace(/[^\w.\-]+/g, '_'));
+    } catch (e) {
+      tab?.close();
+      throw e;
+    }
   };
 
   const buildQuote = async () => {
@@ -500,7 +509,7 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
     });
     const id = kind === 'label' ? 'shipping-label' : kind === 'delivery' ? 'delivery-note' : 'receipt';
     const tool = TOOLS.find((x) => x.id === id);
-    if (tool) window.location.href = toolPath(tool, lang);
+    if (tool) window.open(toolPath(tool, lang), '_blank');
   };
 
   const quotes = useMemo(() => [...history.items].sort((a, b) => b.data.created - a.data.created), [history.items]);
@@ -935,7 +944,7 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
                   <Pencil aria-hidden="true" />
                   {t.load}
                 </button>
-                <button type="button" class="btn btn-sm" onClick={() => void printQuote(q.data.doc)}>
+                <button type="button" class="btn btn-sm" onClick={() => void printQuote(q.data.doc, true)}>
                   <Printer aria-hidden="true" />
                   {t.reprint}
                 </button>

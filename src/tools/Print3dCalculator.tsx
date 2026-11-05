@@ -3,7 +3,7 @@ import { FileDown, Package, Pencil, Plus, Printer, Receipt, Save, Trash2, Truck,
 import { Field, NumInput, Segmented, downloadBlob, fmtNum, parseNum, useStoredState, type Lang } from './shared/ui';
 import { LogoPicker } from './shared/LogoPicker';
 import { LibraryBar, useLibrary } from './shared/Library';
-import { openLogin } from '../lib/cloud';
+import { openLogin, syncErrorText } from '../lib/cloud';
 import { fetchDollar, type Dollar, type Quote } from '../lib/dolar';
 import { EMPTY_HANDOFF_CLIENT, addressLine, sendHandoff, type HandoffClient } from '../lib/handoff';
 import { TOOLS } from '../data/tools';
@@ -923,6 +923,7 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               )}
             </span>
           </div>
+          {history.syncError && <div class="alert alert-warning" role="alert">{syncErrorText(history.syncError, lang)}</div>}
           {quotes.length === 0 && <span class="muted">{t.historyEmpty}</span>}
           {quotes.map((q) => (
             <div class="p3-q" key={q.id}>

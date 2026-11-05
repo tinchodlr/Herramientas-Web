@@ -31,6 +31,8 @@ export type CloudStatus = 'off' | 'loading' | 'in' | 'out';
 export interface CloudState {
   status: CloudStatus;
   user: CloudUser | null;
+  /** Código del último error al sincronizar con la nube ('' si todo va bien). */
+  syncError: string;
 }
 
 const HINT = 'cloud-hint';
@@ -38,7 +40,7 @@ const REGISTRY = 'cloud-keys';
 /** Un documento de Firestore admite 1 MiB: por las dudas no se sincroniza nada que se acerque. */
 const MAX_CHARS = 900_000;
 
-let state: CloudState = { status: 'off', user: null };
+let state: CloudState = { status: 'off', user: null, syncError: '' };
 const subs = new Set<(s: CloudState) => void>();
 const emit = (next: CloudState) => {
   state = next;
@@ -110,15 +112,15 @@ export async function startCloud() {
     A.onAuthStateChanged(auth, (u) => {
       if (u) {
         store.set(HINT, '1');
-        emit({ status: 'in', user: toUser(u) });
+        emit({ status: 'in', user: toUser(u), syncError: '' });
       } else {
         store.del(HINT);
-        emit({ status: 'out', user: null });
+        emit({ status: 'out', user: null, syncError: '' });
       }
     });
   } catch {
     listening = false;
-    emit({ status: 'out', user: null });
+    emit({ status: 'out', user: null, syncError: '' });
   }
 }
 
@@ -224,20 +226,70 @@ export const setLocalStamp = (key: string, t: number) => {
 
 const uid = () => state.user?.uid;
 
+const codeOf = (e: unknown) => ((e as { code?: string })?.code ?? 'unknown').replace(/^firestore\//, '');
+export function setSyncError(code: string) {
+  if (state.syncError !== code) emit({ ...state, syncError: code });
+}
+
+/** Explica en palabras un error de sincronización. */
+export function syncErrorText(code: string, lang: 'es' | 'en') {
+  const es = lang === 'es';
+  if (code === 'permission-denied')
+    return es
+      ? 'Firebase no deja guardar tus datos en la nube: falta publicar las reglas de seguridad de Firestore.'
+      : 'Firebase is not allowing your data to be saved: the Firestore security rules still need to be published.';
+  if (code === 'unavailable' || code === 'network-request-failed')
+    return es ? 'No hay conexión con el servidor. Se sincroniza cuando vuelva.' : 'No connection to the server. It will sync when it is back.';
+  if (code === 'not-found' || code === 'failed-precondition')
+    return es ? 'La base de datos de Firestore todavía no está creada o disponible.' : 'The Firestore database is not created or available yet.';
+  return es ? `No se pudo sincronizar con la nube (${code}).` : `Could not sync with the cloud (${code}).`;
+}
+
+/** Escribe y lee un documento de prueba. Devuelve '' si todo anda, o el código del error. */
+export async function testSync(): Promise<string> {
+  const id = uid();
+  if (!id) return 'signed-out';
+  try {
+    const { db, F } = await loadFirebase();
+    const ref = F.doc(db, 'users', id, 'kv', '_ping');
+    await F.setDoc(ref, { v: 'ok', t: Date.now() });
+    const snap = await F.getDoc(ref);
+    if (!snap.exists()) throw Object.assign(new Error('missing'), { code: 'not-found' });
+    setSyncError('');
+    return '';
+  } catch (e) {
+    const code = codeOf(e);
+    setSyncError(code);
+    return code;
+  }
+}
+
 export async function kvPull(key: string): Promise<{ v: string; t: number } | null> {
   const id = uid();
   if (!id) return null;
-  const { db, F } = await loadFirebase();
-  const snap = await F.getDoc(F.doc(db, 'users', id, 'kv', key));
-  const d = snap.data();
-  return d && typeof d.v === 'string' ? { v: d.v, t: Number(d.t) || 0 } : null;
+  try {
+    const { db, F } = await loadFirebase();
+    const snap = await F.getDoc(F.doc(db, 'users', id, 'kv', key));
+    const d = snap.data();
+    setSyncError('');
+    return d && typeof d.v === 'string' ? { v: d.v, t: Number(d.t) || 0 } : null;
+  } catch (e) {
+    setSyncError(codeOf(e));
+    throw e;
+  }
 }
 
 export async function kvPush(key: string, v: string, t: number) {
   const id = uid();
   if (!id || v.length > MAX_CHARS) return;
-  const { db, F } = await loadFirebase();
-  await F.setDoc(F.doc(db, 'users', id, 'kv', key), { v, t });
+  try {
+    const { db, F } = await loadFirebase();
+    await F.setDoc(F.doc(db, 'users', id, 'kv', key), { v, t });
+    setSyncError('');
+  } catch (e) {
+    setSyncError(codeOf(e));
+    throw e;
+  }
 }
 
 // ───────── Colecciones de elementos guardados (perfiles, presupuestos, etiquetas…) ─────────
@@ -281,6 +333,7 @@ export function watchItems<T>(col: string, onChange: (items: SavedItem<T>[]) => 
     off = F.onSnapshot(
       q,
       (snap) => {
+        setSyncError('');
         const remote: SavedItem<T>[] = [];
         snap.forEach((d) => {
           const x = d.data();
@@ -301,7 +354,7 @@ export function watchItems<T>(col: string, onChange: (items: SavedItem<T>[]) => 
         writeCache(col, remote);
         onChange(remote);
       },
-      () => {},
+      (err) => setSyncError(codeOf(err)),
     );
   });
   return () => {
@@ -315,13 +368,25 @@ export async function pushItem<T>(col: string, item: SavedItem<T>) {
   if (!id) return;
   const d = JSON.stringify(item.data);
   if (d.length > MAX_CHARS) throw new Error('too-big');
-  const { db, F } = await loadFirebase();
-  await F.setDoc(F.doc(db, 'users', id, 'items', item.id), { col, name: item.name, d, t: item.t });
+  try {
+    const { db, F } = await loadFirebase();
+    await F.setDoc(F.doc(db, 'users', id, 'items', item.id), { col, name: item.name, d, t: item.t });
+    setSyncError('');
+  } catch (e) {
+    setSyncError(codeOf(e));
+    throw e;
+  }
 }
 
 export async function removeItem(itemId: string) {
   const id = uid();
   if (!id) return;
-  const { db, F } = await loadFirebase();
-  await F.deleteDoc(F.doc(db, 'users', id, 'items', itemId));
+  try {
+    const { db, F } = await loadFirebase();
+    await F.deleteDoc(F.doc(db, 'users', id, 'items', itemId));
+    setSyncError('');
+  } catch (e) {
+    setSyncError(codeOf(e));
+    throw e;
+  }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Cloud, HardDrive, Save, Trash2 } from 'lucide-preact';
 import {
-  getCloudState, newId, openLogin, pushItem, readCache, removeItem, subscribeCloud, watchItems, writeCache, type CloudState, type SavedItem,
+  getCloudState, newId, openLogin, pushItem, readCache, removeItem, subscribeCloud, syncErrorText, watchItems, writeCache, type CloudState, type SavedItem,
 } from '../../lib/cloud';
 import type { Lang } from '../../lib/format';
 
@@ -75,7 +75,7 @@ export function useLibrary<T>(col: string) {
   };
 
   const sorted = useMemo(() => [...items].sort((a, b) => a.name.localeCompare(b.name)), [items]);
-  return { items: sorted, save, remove, loggedIn: cloud.status === 'in' };
+  return { items: sorted, save, remove, loggedIn: cloud.status === 'in', syncError: cloud.status === 'in' ? cloud.syncError : '' };
 }
 
 interface BarProps<T> {
@@ -187,6 +187,11 @@ export function LibraryBar<T>({ col, lang, title, getData, onLoad, suggestName, 
           {exists ? t.update : t.save}
         </button>
       </form>
+      {lib.syncError && (
+        <div class="alert alert-warning" role="alert">
+          {syncErrorText(lib.syncError, lang)}
+        </div>
+      )}
       {note && (
         <span class="hint" role="status">
           {note}

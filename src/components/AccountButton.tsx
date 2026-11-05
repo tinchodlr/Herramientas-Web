@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'preact/hooks';
 import { LogIn, LogOut, MailCheck, UserRound, X } from 'lucide-preact';
 import {
   OPEN_LOGIN_EVENT, authErrorKey, getCloudState, resendVerification, resetPassword, resumeCloud, signInEmail, signInGoogle, signOutCloud, signUpEmail,
-  startCloud, subscribeCloud, type AuthErrorKey, type CloudState,
+  startCloud, subscribeCloud, syncErrorText, testSync, type AuthErrorKey, type CloudState,
 } from '../lib/cloud';
 
 type Lang = 'es' | 'en';
@@ -31,6 +31,8 @@ const T = {
     resend: 'Reenviar mail de verificación',
     resent: 'Listo, te lo reenviamos.',
     signOut: 'Cerrar sesión',
+    test: 'Probar sincronización',
+    testOk: 'La sincronización funciona: tus datos se guardan en la nube.',
     signOutNote: 'Al cerrar sesión se borra la copia guardada en este navegador. Tus datos siguen en tu cuenta.',
     synced: 'Tus datos se guardan en tu cuenta y se sincronizan entre dispositivos.',
     close: 'Cerrar',
@@ -70,6 +72,8 @@ const T = {
     resend: 'Resend verification email',
     resent: 'Done, we sent it again.',
     signOut: 'Sign out',
+    test: 'Test sync',
+    testOk: 'Sync works: your data is being saved to the cloud.',
     signOutNote: 'Signing out removes the copy stored in this browser. Your data stays in your account.',
     synced: 'Your data is saved to your account and synced across devices.',
     close: 'Close',
@@ -195,8 +199,23 @@ export default function AccountButton({ lang }: { lang: Lang }) {
               )}
               {info && <div class="alert alert-success" role="status">{info}</div>}
               {error && <div class="alert alert-danger" role="alert">{error}</div>}
+              {cloud.syncError && <div class="alert alert-warning" role="alert">{syncErrorText(cloud.syncError, lang)}</div>}
               <p class="hint" style="margin:0">{t.signOutNote}</p>
               <div class="btn-row">
+                <button
+                  type="button"
+                  class="btn"
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setInfo('');
+                    const code = await testSync();
+                    setBusy(false);
+                    if (!code) setInfo(t.testOk);
+                  }}
+                >
+                  {t.test}
+                </button>
                 <button type="button" class="btn" disabled={busy} onClick={() => void run(() => signOutCloud())}>
                   <LogOut aria-hidden="true" />
                   {t.signOut}

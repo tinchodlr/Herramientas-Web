@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { createPortal } from 'preact/compat';
 import { Download, ImageUp, Printer, Trash2 } from 'lucide-preact';
 import { CopyButton, Field, Segmented, downloadText, useStoredState, type Lang } from './shared/ui';
+import { LibraryBar } from './shared/Library';
 import { qrSvg } from './shared/qr';
 import {
   SIZE_MM, addressText, expandPackages, senderLine, whatsappLink,
@@ -22,7 +23,9 @@ const PREFS = { format: 'a4-8x14' as Format, pos: 1, zplSize: '10x15' as LabelSi
 const T = {
   es: {
     sender: 'Remitente',
-    senderHint: 'Se guarda en este navegador para la próxima vez. Nada se sube a ningún servidor.',
+    savedSenders: 'Remitentes guardados',
+    savedRecipients: 'Destinatarios guardados',
+    senderHint: 'Se guarda en este navegador para la próxima vez (y en tu cuenta si iniciaste sesión).',
     logo: 'Logo (opcional)',
     uploadLogo: 'Subir logo',
     removeLogo: 'Quitar',
@@ -86,7 +89,9 @@ const T = {
   },
   en: {
     sender: 'Sender',
-    senderHint: 'Saved in this browser for next time. Nothing is uploaded to any server.',
+    savedSenders: 'Saved senders',
+    savedRecipients: 'Saved recipients',
+    senderHint: 'Saved in this browser for next time (and in your account if you are signed in).',
     logo: 'Logo (optional)',
     uploadLogo: 'Upload logo',
     removeLogo: 'Remove',
@@ -249,6 +254,7 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
         <section class="panel">
           <h2 class="panel-title">{t.sender}</h2>
           <div class="stack">
+            <LibraryBar col="ship-senders" lang={lang} title={t.savedSenders} getData={() => sender} onLoad={(d) => setSender({ ...EMPTY_SENDER, ...d })} suggestName={() => sender.business.trim()} />
             <div class="logo-row">
               <div class="logo-prev">{sender.logo ? <img src={sender.logo} alt="" /> : <ImageUp aria-hidden="true" />}</div>
               <div class="btn-row">
@@ -296,6 +302,7 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
           </div>
           {mode === 'single' ? (
             <div class="stack">
+              <LibraryBar col="ship-recipients" lang={lang} title={t.savedRecipients} getData={() => rec} onLoad={(d) => setRec({ ...EMPTY_RECIPIENT, ...d })} suggestName={() => rec.name.trim()} />
               <div class="form-grid">
                 <TextField id="r-order" label={t.order} value={rec.order} onInput={(v) => setR('order', v)} />
                 <TextField id="r-name" label={t.name} value={rec.name} onInput={(v) => setR('name', v)} />

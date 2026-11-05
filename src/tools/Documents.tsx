@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Download, ExternalLink, Plus, Trash2, TriangleAlert } from 'lucide-preact';
 import { Field, NumInput, downloadBlob, parseNum, useStoredState, type Lang } from './shared/ui';
 import { LogoPicker } from './shared/LogoPicker';
+import { LibraryBar } from './shared/Library';
 import { amountInWords } from '../lib/numwords';
 import { buildDocumentPdf, computeTotals, fmtDate, money, type DocData, type DocItem, type DocKind, type Issuer, type PdfWords } from './documents/pdf';
 
 const T = {
   es: {
     issuer: 'Tus datos',
-    issuerHint: 'Se guardan solo en este navegador.',
+    issuerHint: 'Se guardan en este navegador (y en tu cuenta si iniciaste sesión).',
+    savedIssuers: 'Perfiles de emisor guardados',
+    savedDocs: { quote: 'Presupuestos guardados', delivery: 'Remitos guardados', receipt: 'Recibos guardados' },
     uploadLogo: 'Subir logo',
     removeLogo: 'Quitar',
     logo: 'Logo',
@@ -89,7 +92,9 @@ const T = {
   },
   en: {
     issuer: 'Your details',
-    issuerHint: 'Saved only in this browser.',
+    issuerHint: 'Saved in this browser (and in your account if you are signed in).',
+    savedIssuers: 'Saved issuer profiles',
+    savedDocs: { quote: 'Saved quotes', delivery: 'Saved delivery notes', receipt: 'Saved receipts' },
     uploadLogo: 'Upload logo',
     removeLogo: 'Remove',
     logo: 'Logo',
@@ -273,6 +278,7 @@ export default function Documents({ lang, kind }: { lang: Lang; kind: DocKind })
             <h2 class="panel-title" style="margin-bottom:2px">{t.issuer}</h2>
             <span class="hint">{t.issuerHint}</span>
           </div>
+          <LibraryBar col="doc-issuers" lang={lang} title={t.savedIssuers} getData={() => issuer} onLoad={(d) => setIssuer({ ...EMPTY_ISSUER, ...d })} suggestName={() => issuer.name.trim()} />
           <LogoPicker value={issuer.logo} onChange={(v) => setI('logo', v)} uploadLabel={t.uploadLogo} removeLabel={t.removeLogo} ariaLabel={t.logo} />
           <div class="form-grid">
             <Field label={t.name} htmlFor="d-name">
@@ -306,6 +312,25 @@ export default function Documents({ lang, kind }: { lang: Lang; kind: DocKind })
 
         <section class="panel stack">
           <h2 class="panel-title" style="margin:0">{t.document}</h2>
+          <LibraryBar
+            col={`docs-${kind}`}
+            lang={lang}
+            title={t.savedDocs[kind]}
+            getData={() => ({ number, date, client, items, discount, notes, amount, concept, reference, prefs })}
+            onLoad={(d) => {
+              setNumber(d.number);
+              setDate(d.date);
+              setClient(d.client);
+              setItems(d.items.length ? d.items.map((it) => ({ ...it, id: nextId++ })) : [newItem()]);
+              setDiscount(d.discount);
+              setNotes(d.notes);
+              setAmount(d.amount);
+              setConcept(d.concept);
+              setReference(d.reference);
+              setPrefs((p) => ({ ...p, ...d.prefs }));
+            }}
+            suggestName={() => [client.name.trim(), number].filter(Boolean).join(' · ')}
+          />
           <div class="form-grid">
             <Field label={t.number} htmlFor="d-num">
               <input id="d-num" class="input" value={number} onInput={(e) => setNumber(e.currentTarget.value)} />

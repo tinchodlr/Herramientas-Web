@@ -1,7 +1,8 @@
 import type { ComponentChildren, PartialInputHTMLAttributes } from 'preact';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useCallback, useEffect, useRef, useState, type StateUpdater } from 'preact/hooks';
 import { Check, Copy, Upload } from 'lucide-preact';
 import type { Lang } from '../../lib/format';
+import { getCloudState, kvPull, kvPush, localStamp, setLocalStamp, subscribeCloud, type CloudState } from '../../lib/cloud';
 
 export type { Lang };
 export { fmtMoney, fmtNum, fmtPct, formatBytes, parseNum } from '../../lib/format';
@@ -225,26 +226,82 @@ export async function zipBlobs(files: { name: string; blob: Blob }[]) {
   return new Blob([zipped as BlobPart], { type: 'application/zip' });
 }
 
-/** Estado que se recuerda en este navegador (localStorage). Si no hay acceso, funciona igual sin guardar. */
+/**
+ * Estado que se recuerda en este navegador (localStorage). Si no hay acceso, funciona igual sin guardar.
+ * Con una sesión iniciada, además se guarda en la cuenta y se comparte entre dispositivos: gana
+ * siempre la versión más reciente.
+ */
 export function useStoredState<T>(key: string, initial: T) {
-  const [value, setValue] = useState<T>(initial);
+  const [value, setValueRaw] = useState<T>(initial);
   const loaded = useRef(false);
+  const dirty = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
+  const setValue = useCallback((next: StateUpdater<T>) => {
+    dirty.current = true;
+    setValueRaw(next);
+  }, []);
+
+  const parse = (raw: string) => {
+    const parsed = JSON.parse(raw);
+    const isObject = initial && typeof initial === 'object' && !Array.isArray(initial);
+    return (isObject ? { ...initial, ...parsed } : parsed) as T;
+  };
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
-      if (raw !== null) {
-        const parsed = JSON.parse(raw);
-        const isObject = initial && typeof initial === 'object' && !Array.isArray(initial);
-        setValue(isObject ? ({ ...initial, ...parsed } as T) : parsed);
-      }
+      if (raw !== null) setValueRaw(parse(raw));
     } catch {}
     loaded.current = true;
   }, [key]);
+
+  // Al iniciar sesión (o si ya estaba iniciada) se compara con la copia de la cuenta.
   useEffect(() => {
-    if (!loaded.current) return;
+    let alive = true;
+    let busy = false;
+    const reconcile = async (s: CloudState) => {
+      if (s.status !== 'in' || busy) return;
+      busy = true;
+      try {
+        const remote = await kvPull(key);
+        if (!alive) return;
+        const stamp = localStamp(key);
+        if (remote && remote.t > stamp) {
+          setValueRaw(parse(remote.v));
+          try {
+            localStorage.setItem(key, remote.v);
+          } catch {}
+          setLocalStamp(key, remote.t);
+        } else if (stamp > (remote?.t ?? 0)) {
+          const raw = localStorage.getItem(key);
+          if (raw !== null) await kvPush(key, raw, stamp);
+        }
+      } catch {
+      } finally {
+        busy = false;
+      }
+    };
+    void reconcile(getCloudState());
+    const off = subscribeCloud((s) => void reconcile(s));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, [key]);
+
+  useEffect(() => {
+    if (!loaded.current || !dirty.current) return;
+    dirty.current = false;
+    const raw = JSON.stringify(value);
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem(key, raw);
     } catch {}
+    const t = Date.now();
+    setLocalStamp(key, t);
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      if (getCloudState().status === 'in') kvPush(key, raw, t).catch(() => {});
+    }, 600);
   }, [key, value]);
   return [value, setValue] as const;
 }

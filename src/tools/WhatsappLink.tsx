@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 import { Download, ExternalLink } from 'lucide-preact';
 import { CopyButton, Field, downloadBlob, type Lang } from './shared/ui';
 import { qrMatrix, qrSvg } from './shared/qr';
+import { LibraryBar } from './shared/Library';
 
 const T = {
   es: {
@@ -11,6 +12,7 @@ const T = {
     message: 'Mensaje (opcional)',
     messageHint: 'Aparece escrito en el chat cuando la persona abre el link.',
     templates: 'Plantillas',
+    saved: 'Links guardados',
     templateList: [
       ['Consulta por un producto', 'Hola! Quería consultar por este producto: '],
       ['Hacer un pedido', 'Hola! Quiero hacer un pedido.'],
@@ -37,6 +39,7 @@ const T = {
     message: 'Message (optional)',
     messageHint: 'It shows up typed in the chat when the person opens the link.',
     templates: 'Templates',
+    saved: 'Saved links',
     templateList: [
       ['Ask about a product', 'Hi! I wanted to ask about this product: '],
       ['Place an order', 'Hi! I would like to place an order.'],
@@ -136,6 +139,14 @@ export default function WhatsappLink({ lang }: { lang: Lang }) {
   return (
     <div class="tool-layout">
       <section class="panel stack">
+        <LibraryBar
+          col="wa-links"
+          lang={lang}
+          title={t.saved}
+          getData={() => ({ country, phone, message })}
+          onLoad={(d) => (setCountry(d.country), setPhone(d.phone), setMessage(d.message))}
+          suggestName={() => phone.trim()}
+        />
         <Field label={t.country} htmlFor="wa-country">
           <select id="wa-country" class="select" value={country} onChange={(e) => setCountry(e.currentTarget.value)}>
             {COUNTRIES.map((c) => (

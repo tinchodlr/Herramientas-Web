@@ -2,6 +2,7 @@ import { useMemo, useState } from 'preact/hooks';
 import { FileDown, Plus, Trash2, Wand2 } from 'lucide-preact';
 import { Field, NumInput, downloadBlob, fmtNum, parseNum, useStoredState, type Lang } from './shared/ui';
 import { LogoPicker } from './shared/LogoPicker';
+import { LibraryBar } from './shared/Library';
 import { CURRENCIES, calculate, symbolOf, type Part, type Settings } from '../lib/print3d';
 import { DOC_WORDS, EMPTY_ISSUER } from './Documents';
 import type { Issuer } from './documents/pdf';
@@ -9,6 +10,8 @@ import type { Issuer } from './documents/pdf';
 const T = {
   es: {
     parts: 'Piezas a imprimir',
+    savedJobs: 'Trabajos guardados',
+    savedProfiles: 'Perfiles de impresión (costos y parámetros)',
     partName: 'Nombre de la pieza',
     grams: 'Peso (g)',
     hours: 'Horas',
@@ -77,6 +80,8 @@ const T = {
   },
   en: {
     parts: 'Parts to print',
+    savedJobs: 'Saved jobs',
+    savedProfiles: 'Printing profiles (costs and parameters)',
     partName: 'Part name',
     grams: 'Weight (g)',
     hours: 'Hours',
@@ -222,6 +227,19 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               {t.example}
             </button>
           </div>
+          <LibraryBar
+            col="p3d-jobs"
+            lang={lang}
+            title={t.savedJobs}
+            getData={() => ({ parts, client, notes, s })}
+            onLoad={(d) => {
+              setParts(d.parts.length ? d.parts.map((p) => newPart({ ...p })) : [newPart()]);
+              setClient(d.client);
+              setNotes(d.notes);
+              setS({ ...DEFAULTS, ...d.s });
+            }}
+            suggestName={() => client.trim() || parts[0]?.name.trim()}
+          />
           {parts.map((p, i) => (
             <div class="p3-part" key={p.id}>
               <div class="p3-name">
@@ -250,6 +268,7 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
 
         <section class="panel stack">
           <h2 class="panel-title" style="margin:0">{t.material}</h2>
+          <LibraryBar col="p3d-profiles" lang={lang} title={t.savedProfiles} getData={() => s} onLoad={(d) => setS({ ...DEFAULTS, ...d })} suggestName={() => (lang === 'es' ? 'Mi impresora' : 'My printer')} />
           <div class="form-grid">
             {num('p3-fil', t.filamentKg, 'filamentKg', { prefix: sym })}
             {num('p3-waste', t.waste, 'waste', { suffix: '%' })}

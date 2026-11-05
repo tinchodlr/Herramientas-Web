@@ -17,6 +17,7 @@
     "@types/jsbarcode": "^3.11.4",
     "astro": "^7.4.2",
     "fflate": "^0.8.3",
+    "firebase": "^13.2.0",
     "jsbarcode": "^3.12.3",
     "lucide-preact": "^1.63.0",
     "pdf-lib": "^1.17.1",

@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'preact/hooks';
-import { FileDown, Plus, Trash2, Wand2 } from 'lucide-preact';
-import { Field, NumInput, downloadBlob, fmtNum, parseNum, useStoredState, type Lang } from './shared/ui';
+import { FileDown, Package, Pencil, Plus, Printer, Receipt, Save, Trash2, Truck, Wand2 } from 'lucide-preact';
+import { Field, NumInput, Segmented, downloadBlob, fmtNum, parseNum, useStoredState, type Lang } from './shared/ui';
 import { LogoPicker } from './shared/LogoPicker';
-import { LibraryBar } from './shared/Library';
-import { CURRENCIES, calculate, symbolOf, type Part, type Settings } from '../lib/print3d';
+import { LibraryBar, useLibrary } from './shared/Library';
+import { openLogin } from '../lib/cloud';
+import { EMPTY_HANDOFF_CLIENT, addressLine, sendHandoff, type HandoffClient } from '../lib/handoff';
+import { TOOLS } from '../data/tools';
+import { toolPath } from '../i18n/ui';
+import { CURRENCIES, EMPTY_MODEL, calculate, symbolOf, type ModelBuy, type Part, type Settings, type Supply } from '../lib/print3d';
 import { DOC_WORDS, EMPTY_ISSUER } from './Documents';
-import type { Issuer } from './documents/pdf';
+import { fmtDate, type DocData, type Issuer } from './documents/pdf';
 
 const T = {
   es: {
@@ -34,8 +38,60 @@ const T = {
     labor: 'Valor de tu hora de trabajo',
     setupMin: 'Preparación del trabajo (min)',
     setupHint: 'Laminado, cambio de material, atención al cliente: se cobra una sola vez.',
-    packaging: 'Embalaje y otros costos fijos',
+    packaging: 'Embalaje y otros costos fijos (valor anterior)',
+    supTitle: 'Insumos del trabajo',
+    supHint: 'Embalaje, protección y accesorios. Se cobran una sola vez por trabajo y llevan la misma ganancia que el resto.',
+    supName: 'Insumo',
+    supPrice: 'Precio',
+    supCur: 'Moneda',
+    addSupply: 'Agregar insumo',
+    removeSupply: 'Quitar insumo',
+    defaultSupplies: ['Embalaje', 'Protección del embalaje', 'Accesorios adicionales'],
+    modelBuy: 'Tuve que comprar el modelo 3D',
+    modelName: 'Modelo (nombre o link)',
+    modelPrice: 'Precio del modelo',
+    modelHint: 'Si lo pagaste en otra moneda, elegila y cargá la cotización: se pasa a pesos con el cambio que pongas.',
+    converted: (amount: string) => `≈ ${amount} al cambio cargado`,
+    rateMissing: 'Cargá la cotización para convertir los importes en otra moneda.',
+    rateDate: 'Cotización del día',
+    rateUsed: (a: string, rate: string, b: string, date: string) => `Cotización: 1 ${a} = ${b} ${rate}${date ? ` al ${date}` : ''}`,
+    equivalent: (amount: string, a: string, rate: string, b: string, date: string) => `Equivalente: ${a} ${amount} (cotización 1 ${a} = ${b} ${rate}${date ? ` al ${date}` : ''}).`,
+    suppliesLine: 'Insumos y embalaje',
+    modelLine: 'Modelo 3D',
     markup: 'Ganancia sobre el costo',
+    markupMultHint: 'Ej.: 2 = el precio es el doble del costo.',
+    quoteNumber: 'Número de presupuesto',
+    validity: 'Validez (días)',
+    validityHint: 'Se imprime como “Válido hasta” en el PDF. Dejalo vacío para no mostrarlo.',
+    quoteNumberHint: 'Se guarda y sube solo con cada presupuesto.',
+    quoteTitle: 'Título del presupuesto',
+    quoteTitlePh: 'Ej.: Soportes para el local',
+    clientTax: 'CUIT / DNI',
+    clientPhone: 'Teléfono',
+    clientAddr: 'Dirección del cliente (también para remito y etiqueta)',
+    street: 'Calle y altura',
+    floor: 'Piso / depto',
+    barrio: 'Barrio',
+    city: 'Localidad',
+    cp: 'CP',
+    saveQuote: 'Guardar presupuesto',
+    savedOk: 'Guardado',
+    editing: (n: string) => `Editando el presupuesto ${n}. Al guardar se actualiza.`,
+    newQuote: 'Hacer uno nuevo',
+    historyTitle: 'Presupuestos guardados',
+    historyHint: 'Se guardan al descargar o con “Guardar presupuesto”. Desde acá podés volver a imprimirlos y crear el remito, el recibo o la etiqueta de envío.',
+    historyEmpty: 'Todavía no hay presupuestos guardados.',
+    load: 'Editar',
+    reprint: 'Imprimir PDF',
+    toDelivery: 'Remito',
+    toReceipt: 'Recibo',
+    toLabel: 'Etiqueta de envío',
+    del: 'Eliminar',
+    confirmDel: (n: string) => `¿Eliminar el presupuesto ${n}?`,
+    local: 'Se guardan solo en este navegador.',
+    login: 'Iniciá sesión',
+    localTail: 'para tenerlos en todos tus dispositivos.',
+    cloud: 'Sincronizados con tu cuenta.',
     round: 'Redondear precios hacia arriba',
     roundOpts: [['0', 'No redondear'], ['1', 'Al entero'], ['10', 'A la decena'], ['100', 'A la centena']] as [string, string][],
     currency: 'Moneda',
@@ -55,9 +111,9 @@ const T = {
     vat: 'IVA',
     total: 'Total',
     perUnit: 'Precio por unidad',
-    setup: 'Preparación y embalaje',
+    setup: 'Preparación del trabajo',
     breakdown: 'En qué se va el costo',
-    labels: { material: 'Material', energy: 'Electricidad', machine: 'Máquina', risk: 'Fallas', labor: 'Mano de obra', extra: 'Extras y embalaje' } as Record<string, string>,
+    labels: { material: 'Material', energy: 'Electricidad', machine: 'Máquina', risk: 'Fallas', labor: 'Mano de obra', extra: 'Extras por pieza', supplies: 'Insumos', model: 'Modelo 3D' } as Record<string, string>,
     quote: 'Presupuesto en PDF',
     quoteHint: 'Arma un presupuesto con estas piezas. Es un documento no fiscal.',
     clientName: 'Cliente',
@@ -104,8 +160,60 @@ const T = {
     labor: 'Your hourly rate',
     setupMin: 'Job setup (min)',
     setupHint: 'Slicing, material changes, customer service: charged once per job.',
-    packaging: 'Packaging and other fixed costs',
+    packaging: 'Packaging and other fixed costs (previous value)',
+    supTitle: 'Job supplies',
+    supHint: 'Packaging, protection and accessories. Charged once per job, with the same profit as everything else.',
+    supName: 'Supply',
+    supPrice: 'Price',
+    supCur: 'Currency',
+    addSupply: 'Add supply',
+    removeSupply: 'Remove supply',
+    defaultSupplies: ['Packaging', 'Packaging protection', 'Additional accessories'],
+    modelBuy: 'I had to buy the 3D model',
+    modelName: 'Model (name or link)',
+    modelPrice: 'Model price',
+    modelHint: 'If you paid in another currency, pick it and enter the exchange rate: it is converted with the rate you set.',
+    converted: (amount: string) => `≈ ${amount} at the entered rate`,
+    rateMissing: 'Enter the exchange rate to convert amounts in another currency.',
+    rateDate: 'Rate of the day',
+    rateUsed: (a: string, rate: string, b: string, date: string) => `Exchange rate: 1 ${a} = ${b} ${rate}${date ? ` on ${date}` : ''}`,
+    equivalent: (amount: string, a: string, rate: string, b: string, date: string) => `Equivalent: ${a} ${amount} (rate 1 ${a} = ${b} ${rate}${date ? ` on ${date}` : ''}).`,
+    suppliesLine: 'Supplies and packaging',
+    modelLine: '3D model',
     markup: 'Profit on cost',
+    markupMultHint: 'E.g. 2 = the price is double the cost.',
+    quoteNumber: 'Quote number',
+    validity: 'Validity (days)',
+    validityHint: 'Printed as “Valid until” on the PDF. Leave empty to hide it.',
+    quoteNumberHint: 'Saved and increased automatically with each quote.',
+    quoteTitle: 'Quote title',
+    quoteTitlePh: 'E.g. Display stands for the shop',
+    clientTax: 'Tax ID',
+    clientPhone: 'Phone',
+    clientAddr: 'Customer address (also used for delivery note and label)',
+    street: 'Street and number',
+    floor: 'Floor / apt',
+    barrio: 'Neighborhood',
+    city: 'City',
+    cp: 'Postal code',
+    saveQuote: 'Save quote',
+    savedOk: 'Saved',
+    editing: (n: string) => `Editing quote ${n}. Saving updates it.`,
+    newQuote: 'Start a new one',
+    historyTitle: 'Saved quotes',
+    historyHint: 'They are saved when you download or with “Save quote”. From here you can print them again and create the delivery note, receipt or shipping label.',
+    historyEmpty: 'No saved quotes yet.',
+    load: 'Edit',
+    reprint: 'Print PDF',
+    toDelivery: 'Delivery note',
+    toReceipt: 'Receipt',
+    toLabel: 'Shipping label',
+    del: 'Delete',
+    confirmDel: (n: string) => `Delete quote ${n}?`,
+    local: 'Saved only in this browser.',
+    login: 'Sign in',
+    localTail: 'to keep them on all your devices.',
+    cloud: 'Synced with your account.',
     round: 'Round prices up',
     roundOpts: [['0', 'Do not round'], ['1', 'To the unit'], ['10', 'To the ten'], ['100', 'To the hundred']] as [string, string][],
     currency: 'Currency',
@@ -125,9 +233,9 @@ const T = {
     vat: 'VAT',
     total: 'Total',
     perUnit: 'Price per unit',
-    setup: 'Setup and packaging',
+    setup: 'Job setup',
     breakdown: 'Where the cost goes',
-    labels: { material: 'Material', energy: 'Electricity', machine: 'Machine', risk: 'Failures', labor: 'Labor', extra: 'Extras and packaging' } as Record<string, string>,
+    labels: { material: 'Material', energy: 'Electricity', machine: 'Machine', risk: 'Failures', labor: 'Labor', extra: 'Extras per part', supplies: 'Supplies', model: '3D model' } as Record<string, string>,
     quote: 'Quote as PDF',
     quoteHint: 'Builds a quote from these parts. It is a non-fiscal document.',
     clientName: 'Customer',
@@ -152,12 +260,15 @@ const T = {
 
 const DEFAULTS: Settings = {
   currency: 'ARS', custom: '', filamentKg: '', waste: '5', watts: '150', kwh: '', printerCost: '', lifeH: '5000', maint: '10', fail: '10',
-  labor: '', setupMin: '', packaging: '', markup: '100', round: '0', vatOn: false, vatRate: '21', secondOn: false, secondCur: 'USD', rate: '',
+  labor: '', setupMin: '', packaging: '', markup: '100', markupMode: 'pct', round: '0', vatOn: false, vatRate: '21', secondOn: false, secondCur: 'USD', rate: '', rateDate: '',
 };
-const EXAMPLE: Settings = { ...DEFAULTS, filamentKg: '25000', kwh: '120', printerCost: '600000', labor: '3000', setupMin: '15', packaging: '1500', round: '100' };
+const EXAMPLE: Settings = { ...DEFAULTS, filamentKg: '25000', kwh: '120', printerCost: '600000', labor: '3000', setupMin: '15', round: '100' };
 
 let nextId = 1;
 const newPart = (over: Partial<Part> = {}): Part => ({ id: nextId++, name: '', grams: '', h: '', min: '', qty: '1', post: '', extra: '', ...over });
+
+const newSupplyId = () => Math.floor(Math.random() * 1e9) + 1;
+const supplyList = (names: string[], prices: string[] = []): Supply[] => names.map((name, i) => ({ id: newSupplyId(), name, price: prices[i] ?? '', cur: 'main' }));
 
 const today = () => {
   const d = new Date();
@@ -165,11 +276,34 @@ const today = () => {
 };
 const bumpNumber = (n: string) => n.replace(/(\d+)(\D*)$/, (_, d: string, rest: string) => String(Number(d) + 1).padStart(d.length, '0') + rest);
 
+interface QuoteRecord {
+  number: string;
+  date: string; // yyyy-mm-dd, de creación
+  created: number;
+  title: string;
+  client: HandoffClient;
+  partNames: string[];
+  total: number;
+  totalText: string;
+  currency: string;
+  doc: DocData;
+  job: { parts: Part[]; notes: string; s: Settings; supplies?: Supply[]; model?: ModelBuy; validity?: string };
+  /** Total en la segunda moneda con la cotización de ese día. */
+  alt?: { cur: string; rate: number; date: string; total: number };
+}
+
 export default function Print3dCalculator({ lang }: { lang: Lang }) {
   const t = T[lang];
   const [s, setS] = useStoredState<Settings>('p3d-settings', DEFAULTS);
   const [parts, setParts] = useState<Part[]>(() => [newPart()]);
-  const [client, setClient] = useState('');
+  const [client, setClient] = useState<HandoffClient>(EMPTY_HANDOFF_CLIENT);
+  const [quoteTitle, setQuoteTitle] = useState('');
+  const [editing, setEditing] = useState<string | null>(null);
+  const [savedNote, setSavedNote] = useState(false);
+  const history = useLibrary<QuoteRecord>('p3d-quotes');
+  const [supplies, setSupplies] = useStoredState<{ items: Supply[] }>('p3d-supplies', { items: supplyList(t.defaultSupplies) });
+  const [model, setModel] = useState<ModelBuy>(EMPTY_MODEL);
+  const [validity, setValidity] = useStoredState('p3d-validity', '15');
   const [notes, setNotes] = useState(t.notesDefault);
   const [issuer, setIssuer] = useStoredState<Issuer>('doc-issuer', EMPTY_ISSUER);
   const [number, setNumber] = useStoredState('doc-number-quote', '0001-00000001');
@@ -182,33 +316,136 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
   const sym = symbolOf(s.currency, s.custom);
   const secondSym = symbolOf(s.secondCur, '');
   const money = (n: number, symbol = sym) => `${n < 0 ? '−' : ''}${symbol} ${fmtNum(Math.abs(n), lang, 2, 2)}`;
-  const r = useMemo(() => calculate(s, parts, lang), [s, parts, lang]);
+  const r = useMemo(() => calculate(s, parts, lang, supplies.items, model), [s, parts, lang, supplies, model]);
   const rate = parseNum(s.rate, lang);
+  const hasRate = Number.isFinite(rate) && rate > 0;
+  const mainCode = s.currency === 'custom' ? sym : s.currency;
+  const anyAlt = supplies.items.some((x) => x.cur === 'alt') || (model.on && model.cur === 'alt');
+  const rateDateText = s.rateDate ? fmtDate(s.rateDate, lang) : '';
+  const setRate = (v: string) => setS((o) => ({ ...o, rate: v, rateDate: o.rateDate || today() }));
+  const setSupply = (id: number, patch: Partial<Supply>) => {
+    setSupplies((o) => ({ items: o.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+    if (patch.cur === 'alt') set('secondOn', true);
+  };
+  const toMain = (price: string, cur: 'main' | 'alt') => {
+    const v = parseNum(price, lang);
+    return Number.isFinite(v) && v > 0 ? v * (cur === 'alt' ? (hasRate ? rate : 0) : 1) : 0;
+  };
+
+  /** Campos de la cotización (manual): se muestran donde haga falta, nunca dos veces. */
+  const rateFields = (
+    <div class="form-grid">
+      <Field label={t.rate} htmlFor="p3-rate" hint={t.rateHint(s.secondCur, mainCode)}>
+        <NumInput id="p3-rate" value={s.rate} onValue={setRate} prefix={sym} />
+      </Field>
+      <Field label={t.rateDate} htmlFor="p3-rate-date">
+        <input id="p3-rate-date" class="input" type="date" value={s.rateDate} onInput={(e) => set('rateDate', e.currentTarget.value)} />
+      </Field>
+    </div>
+  );
   const hasData = r.priceNet > 0;
   const maxBreak = Math.max(...Object.values(r.breakdown), 0.0001);
+
+  const setC = (k: keyof HandoffClient, v: string) => setClient((c) => ({ ...c, [k]: v }));
+
+  const buildDoc = (quoteNumber: string, date: string): DocData => {
+    const list = r.rows.map((row, i) => ({ id: i, desc: row.part.name.trim() || t.defaultPart(i + 1), qty: String(row.qty), price: fmtNum(row.price, lang, 2, 2) }));
+    if (r.setupPrice > 0) list.push({ id: 999, desc: t.setup, qty: '1', price: fmtNum(r.setupPrice, lang, 2, 2) });
+    if (r.suppliesPrice > 0) list.push({ id: 998, desc: t.suppliesLine, qty: '1', price: fmtNum(r.suppliesPrice, lang, 2, 2) });
+    if (r.modelPrice > 0) list.push({ id: 997, desc: model.name.trim() ? `${t.modelLine}: ${model.name.trim()}` : t.modelLine, qty: '1', price: fmtNum(r.modelPrice, lang, 2, 2) });
+    const equivalent =
+      s.secondOn && hasRate
+        ? t.equivalent(fmtNum(r.total / rate, lang, 2, 2), secondSym, fmtNum(rate, lang, 2), sym, s.rateDate ? fmtDate(s.rateDate, lang) : '')
+        : '';
+    return {
+      kind: 'quote', number: quoteNumber, date, clientName: client.name, clientTaxId: client.taxId, clientAddress: addressLine(client), items: list, discount: '',
+      vat: s.vatOn ? s.vatRate : '0', vatIncluded: false, currency: sym, validity, notes: [notes.trim(), equivalent].filter(Boolean).join('\n'), showPrices: true,
+      amount: '', concept: '', method: '', reference: '',
+    };
+  };
+
+  /** Guarda (o actualiza) el presupuesto en la lista, con su número y fecha de creación. */
+  const saveQuote = async (): Promise<QuoteRecord> => {
+    const quoteNumber = editing ?? number;
+    const prev = history.items.find((i) => i.name === quoteNumber)?.data;
+    const date = prev?.date ?? today();
+    const rec: QuoteRecord = {
+      number: quoteNumber,
+      date,
+      created: prev?.created ?? Date.now(),
+      title: quoteTitle.trim(),
+      client,
+      partNames: r.rows.map((row, i) => row.part.name.trim() || t.defaultPart(i + 1)),
+      total: r.total,
+      totalText: money(r.total),
+      currency: sym,
+      doc: buildDoc(quoteNumber, date),
+      job: { parts, notes, s, supplies: supplies.items, model, validity },
+      alt: s.secondOn && hasRate ? { cur: s.secondCur, rate, date: s.rateDate, total: r.total / rate } : undefined,
+    };
+    try {
+      await history.save(quoteNumber, rec);
+    } catch {}
+    return rec;
+  };
+
+  const printQuote = async (doc: DocData) => {
+    const { buildDocumentPdf } = await import('./documents/pdf');
+    const bytes = await buildDocumentPdf(doc, issuer, lang, DOC_WORDS[lang]);
+    downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${DOC_WORDS[lang].title.quote}-${doc.number}.pdf`.replace(/[^\w.\-]+/g, '_'));
+  };
 
   const buildQuote = async () => {
     setBusy(true);
     try {
-      const { buildDocumentPdf } = await import('./documents/pdf');
-      const list = r.rows.map((row, i) => ({ id: i, desc: row.part.name.trim() || t.defaultPart(i + 1), qty: String(row.qty), price: fmtNum(row.price, lang, 2, 2) }));
-      if (r.setupPrice > 0) list.push({ id: 999, desc: t.setup, qty: '1', price: fmtNum(r.setupPrice, lang, 2, 2) });
-      const bytes = await buildDocumentPdf(
-        {
-          kind: 'quote', number, date: today(), clientName: client, clientTaxId: '', clientAddress: '', items: list, discount: '',
-          vat: s.vatOn ? s.vatRate : '0', vatIncluded: false, currency: sym, validity: '15', notes, showPrices: true,
-          amount: '', concept: '', method: '', reference: '',
-        },
-        issuer,
-        lang,
-        DOC_WORDS[lang],
-      );
-      downloadBlob(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${DOC_WORDS[lang].title.quote}-${number}.pdf`.replace(/[^\w.\-]+/g, '_'));
-      setNumber(bumpNumber(number));
+      const rec = await saveQuote();
+      await printQuote(rec.doc);
+      if (editing === null) setNumber(bumpNumber(number));
     } finally {
       setBusy(false);
     }
   };
+
+  const saveOnly = async () => {
+    setBusy(true);
+    try {
+      await saveQuote();
+      if (editing === null) setNumber(bumpNumber(number));
+      setSavedNote(true);
+      setTimeout(() => setSavedNote(false), 2400);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const loadQuote = (rec: QuoteRecord) => {
+    setParts(rec.job.parts.length ? rec.job.parts.map((p) => newPart({ ...p })) : [newPart()]);
+    setClient({ ...EMPTY_HANDOFF_CLIENT, ...rec.client });
+    setQuoteTitle(rec.title);
+    setNotes(rec.job.notes);
+    setS({ ...DEFAULTS, ...rec.job.s });
+    if (rec.job.supplies) setSupplies({ items: rec.job.supplies.map((x) => ({ ...x, id: newSupplyId() })) });
+    setModel({ ...EMPTY_MODEL, ...rec.job.model });
+    if (rec.job.validity !== undefined) setValidity(rec.job.validity);
+    setEditing(rec.number);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goTo = (kind: 'delivery' | 'receipt' | 'label', rec: QuoteRecord) => {
+    sendHandoff({
+      to: kind,
+      number: rec.number,
+      client: { ...EMPTY_HANDOFF_CLIENT, ...rec.client },
+      items: rec.doc.items.map(({ desc, qty, price }) => ({ desc, qty, price })),
+      total: rec.total,
+      currency: rec.currency,
+    });
+    const id = kind === 'label' ? 'shipping-label' : kind === 'delivery' ? 'delivery-note' : 'receipt';
+    const tool = TOOLS.find((x) => x.id === id);
+    if (tool) window.location.href = toolPath(tool, lang);
+  };
+
+  const quotes = useMemo(() => [...history.items].sort((a, b) => b.data.created - a.data.created), [history.items]);
 
   const num = (id: string, label: string, key: keyof Settings, opts: { prefix?: string; suffix?: string; hint?: string } = {}) => (
     <Field label={label} htmlFor={id} hint={opts.hint}>
@@ -222,24 +459,11 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
         <section class="panel stack">
           <div class="p3-head">
             <h2 class="panel-title" style="margin:0">{t.parts}</h2>
-            <button type="button" class="btn btn-sm btn-ghost" onClick={() => (setS(EXAMPLE), setParts([newPart({ name: lang === 'es' ? 'Soporte de auriculares' : 'Headphone stand', grams: '85', h: '4', min: '30', qty: '3', post: '10' })]))}>
+            <button type="button" class="btn btn-sm btn-ghost" onClick={() => (setS(EXAMPLE), setSupplies({ items: supplyList(t.defaultSupplies, ['1500', '400', '']) }), setModel(EMPTY_MODEL), setParts([newPart({ name: lang === 'es' ? 'Soporte de auriculares' : 'Headphone stand', grams: '85', h: '4', min: '30', qty: '3', post: '10' })]))}>
               <Wand2 aria-hidden="true" />
               {t.example}
             </button>
           </div>
-          <LibraryBar
-            col="p3d-jobs"
-            lang={lang}
-            title={t.savedJobs}
-            getData={() => ({ parts, client, notes, s })}
-            onLoad={(d) => {
-              setParts(d.parts.length ? d.parts.map((p) => newPart({ ...p })) : [newPart()]);
-              setClient(d.client);
-              setNotes(d.notes);
-              setS({ ...DEFAULTS, ...d.s });
-            }}
-            suggestName={() => client.trim() || parts[0]?.name.trim()}
-          />
           {parts.map((p, i) => (
             <div class="p3-part" key={p.id}>
               <div class="p3-name">
@@ -286,8 +510,24 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
           <div class="form-grid">
             {num('p3-labor', t.labor, 'labor', { prefix: sym })}
             {num('p3-setup', t.setupMin, 'setupMin', { suffix: 'min', hint: t.setupHint })}
-            {num('p3-pack', t.packaging, 'packaging', { prefix: sym })}
-            {num('p3-markup', t.markup, 'markup', { suffix: '%' })}
+            {s.packaging.trim() !== '' && num('p3-pack', t.packaging, 'packaging', { prefix: sym })}
+            <Field label={t.markup} htmlFor="p3-markup" hint={s.markupMode === 'mult' ? t.markupMultHint : undefined}>
+              <Segmented<'pct' | 'mult'>
+                label={t.markup}
+                value={s.markupMode}
+                onChange={(mode) => {
+                  if (mode === s.markupMode) return;
+                  const v = parseNum(s.markup, lang);
+                  const conv = Number.isFinite(v) ? (mode === 'mult' ? 1 + v / 100 : (v - 1) * 100) : NaN;
+                  setS((o) => ({ ...o, markupMode: mode, markup: Number.isFinite(conv) ? fmtNum(Math.max(conv, 0), lang, 2) : o.markup }));
+                }}
+                options={[
+                  { value: 'pct', label: '% ' + (lang === 'es' ? 'porcentaje' : 'percent') },
+                  { value: 'mult', label: '× ' + (lang === 'es' ? 'multiplicador' : 'multiplier') },
+                ]}
+              />
+              <NumInput id="p3-markup" value={s.markup} onValue={(v) => set('markup', v)} suffix={s.markupMode === 'mult' ? '×' : '%'} />
+            </Field>
           </div>
           <Field label={t.round} htmlFor="p3-round">
             <select id="p3-round" class="select" value={s.round} onChange={(e) => set('round', e.currentTarget.value as Settings['round'])}>
@@ -298,6 +538,74 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               ))}
             </select>
           </Field>
+        </section>
+
+        <section class="panel stack">
+          <div>
+            <h2 class="panel-title" style="margin:0 0 2px">{t.supTitle}</h2>
+            <span class="hint">{t.supHint}</span>
+          </div>
+          {supplies.items.map((x) => (
+            <div class="p3-sup" key={x.id}>
+              <input class="input" aria-label={t.supName} value={x.name} onInput={(e) => setSupply(x.id, { name: e.currentTarget.value })} />
+              <NumInput aria-label={t.supPrice} placeholder="0" prefix={x.cur === 'alt' ? secondSym : sym} value={x.price} onValue={(v) => setSupply(x.id, { price: v })} />
+              <select class="select" aria-label={t.supCur} value={x.cur} onChange={(e) => setSupply(x.id, { cur: e.currentTarget.value as Supply['cur'] })}>
+                <option value="main">{mainCode}</option>
+                <option value="alt">{s.secondCur}</option>
+              </select>
+              <button type="button" class="btn btn-icon btn-ghost" aria-label={t.removeSupply} title={t.removeSupply} onClick={() => setSupplies((o) => ({ items: o.items.filter((i) => i.id !== x.id) }))}>
+                <Trash2 aria-hidden="true" />
+              </button>
+              {x.cur === 'alt' && toMain(x.price, 'alt') > 0 && <span class="hint p3-sup-conv">{t.converted(money(toMain(x.price, 'alt')))}</span>}
+            </div>
+          ))}
+          <div>
+            <button type="button" class="btn btn-sm" onClick={() => setSupplies((o) => ({ items: [...o.items, { id: newSupplyId(), name: '', price: '', cur: 'main' }] }))}>
+              <Plus aria-hidden="true" />
+              {t.addSupply}
+            </button>
+          </div>
+
+          <label class="check">
+            <input type="checkbox" checked={model.on} onChange={(e) => setModel((m) => ({ ...m, on: e.currentTarget.checked }))} />
+            {t.modelBuy}
+          </label>
+          {model.on && (
+            <div class="stack">
+              <div class="p3-model">
+                <Field label={t.modelName} htmlFor="p3-model-name">
+                  <input id="p3-model-name" class="input" value={model.name} onInput={(e) => setModel((m) => ({ ...m, name: e.currentTarget.value }))} />
+                </Field>
+                <Field label={t.modelPrice} htmlFor="p3-model-price">
+                  <NumInput id="p3-model-price" prefix={model.cur === 'alt' ? secondSym : sym} value={model.price} onValue={(v) => setModel((m) => ({ ...m, price: v }))} />
+                </Field>
+                <Field label={t.supCur} htmlFor="p3-model-cur">
+                  <select
+                    id="p3-model-cur"
+                    class="select"
+                    value={model.cur}
+                    onChange={(e) => {
+                      const cur = e.currentTarget.value as ModelBuy['cur'];
+                      setModel((m) => ({ ...m, cur }));
+                      if (cur === 'alt') set('secondOn', true);
+                    }}
+                  >
+                    <option value="main">{mainCode}</option>
+                    <option value="alt">{s.secondCur}</option>
+                  </select>
+                </Field>
+              </div>
+              {model.cur === 'alt' && toMain(model.price, 'alt') > 0 && <span class="hint">{t.converted(money(toMain(model.price, 'alt')))}</span>}
+              <span class="hint">{t.modelHint}</span>
+            </div>
+          )}
+
+          {anyAlt && (
+            <div class="stack">
+              {rateFields}
+              {!hasRate && <div class="alert alert-warning">{t.rateMissing}</div>}
+            </div>
+          )}
         </section>
 
         <section class="panel stack">
@@ -348,9 +656,9 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
                   ))}
                 </select>
               </Field>
-              {num('p3-rate', t.rate, 'rate', { prefix: sym, hint: t.rateHint(s.secondCur, s.currency === 'custom' ? sym : s.currency) })}
             </div>
           )}
+          {s.secondOn && !anyAlt && rateFields}
         </section>
       </div>
 
@@ -364,7 +672,8 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               <div class="p3-total">
                 <span>{s.vatOn ? t.total : t.price}</span>
                 <strong>{money(r.total)}</strong>
-                {s.secondOn && Number.isFinite(rate) && rate > 0 && <span class="muted small">≈ {money(r.total / rate, secondSym)}</span>}
+                {s.secondOn && hasRate && <span class="muted small">≈ {money(r.total / rate, secondSym)}</span>}
+                {s.secondOn && hasRate && <span class="muted small">{t.rateUsed(secondSym, fmtNum(rate, lang, 2), sym, rateDateText)}</span>}
               </div>
               <div class="breakdown">
                 {r.rows.map((row, i) => (
@@ -380,6 +689,18 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
                   <div class="breakdown-row">
                     <span>{t.setup}</span>
                     <span class="amount">{money(r.setupPrice)}</span>
+                  </div>
+                )}
+                {r.suppliesPrice > 0 && (
+                  <div class="breakdown-row">
+                    <span>{t.suppliesLine}</span>
+                    <span class="amount">{money(r.suppliesPrice)}</span>
+                  </div>
+                )}
+                {r.modelPrice > 0 && (
+                  <div class="breakdown-row">
+                    <span>{t.modelLine}</span>
+                    <span class="amount">{money(r.modelPrice)}</span>
                   </div>
                 )}
                 {s.vatOn && (
@@ -435,9 +756,50 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
             <h2 class="panel-title" style="margin:0 0 2px">{t.quote}</h2>
             <span class="hint">{t.quoteHint}</span>
           </div>
-          <Field label={t.clientName} htmlFor="p3-client">
-            <input id="p3-client" class="input" value={client} onInput={(e) => setClient(e.currentTarget.value)} />
+          {editing !== null && (
+            <div class="alert alert-warning p3-editing">
+              <span>{t.editing(editing)}</span>
+              <button type="button" class="btn btn-sm" onClick={() => setEditing(null)}>
+                {t.newQuote}
+              </button>
+            </div>
+          )}
+          <div class="form-grid">
+            <Field label={t.quoteNumber} htmlFor="p3-qnum" hint={editing === null ? t.quoteNumberHint : undefined}>
+              <input id="p3-qnum" class="input" value={editing ?? number} disabled={editing !== null} onInput={(e) => setNumber(e.currentTarget.value)} />
+            </Field>
+            <Field label={t.quoteTitle} htmlFor="p3-qtitle">
+              <input id="p3-qtitle" class="input" placeholder={t.quoteTitlePh} value={quoteTitle} onInput={(e) => setQuoteTitle(e.currentTarget.value)} />
+            </Field>
+          </div>
+          <Field label={t.validity} htmlFor="p3-validity" hint={t.validityHint}>
+            <NumInput id="p3-validity" suffix={lang === 'es' ? 'días' : 'days'} value={validity} onValue={setValidity} />
           </Field>
+          <div class="form-grid">
+            <Field label={t.clientName} htmlFor="p3-client">
+              <input id="p3-client" class="input" value={client.name} onInput={(e) => setC('name', e.currentTarget.value)} />
+            </Field>
+            <Field label={t.clientTax} htmlFor="p3-ctax">
+              <input id="p3-ctax" class="input" value={client.taxId} onInput={(e) => setC('taxId', e.currentTarget.value)} />
+            </Field>
+          </div>
+          <details class="p3-issuer">
+            <summary>{t.clientAddr}</summary>
+            <div class="stack" style="margin-top:12px">
+              <div class="form-grid">
+                <Field label={t.street} htmlFor="p3-cstreet"><input id="p3-cstreet" class="input" value={client.street} onInput={(e) => setC('street', e.currentTarget.value)} /></Field>
+                <Field label={t.floor} htmlFor="p3-cfloor"><input id="p3-cfloor" class="input" value={client.floor} onInput={(e) => setC('floor', e.currentTarget.value)} /></Field>
+              </div>
+              <div class="form-grid">
+                <Field label={t.barrio} htmlFor="p3-cbarrio"><input id="p3-cbarrio" class="input" value={client.barrio} onInput={(e) => setC('barrio', e.currentTarget.value)} /></Field>
+                <Field label={t.city} htmlFor="p3-ccity"><input id="p3-ccity" class="input" value={client.city} onInput={(e) => setC('city', e.currentTarget.value)} /></Field>
+              </div>
+              <div class="form-grid">
+                <Field label={t.cp} htmlFor="p3-ccp"><input id="p3-ccp" class="input" value={client.cp} onInput={(e) => setC('cp', e.currentTarget.value)} /></Field>
+                <Field label={t.clientPhone} htmlFor="p3-cphone"><input id="p3-cphone" class="input" type="tel" value={client.phone} onInput={(e) => setC('phone', e.currentTarget.value)} /></Field>
+              </div>
+            </div>
+          </details>
           <Field label={t.notes} htmlFor="p3-notes">
             <textarea id="p3-notes" class="textarea" rows={3} value={notes} onInput={(e) => setNotes(e.currentTarget.value)} />
           </Field>
@@ -456,12 +818,89 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
               </div>
             </div>
           </details>
-          <div>
+          <div class="btn-row">
             <button type="button" class="btn btn-primary" disabled={!hasData || busy} onClick={buildQuote}>
               <FileDown aria-hidden="true" />
               {t.download}
             </button>
+            <button type="button" class="btn" disabled={!hasData || busy} onClick={saveOnly}>
+              <Save aria-hidden="true" />
+              {savedNote ? t.savedOk : t.saveQuote}
+            </button>
           </div>
+        </section>
+
+        <section class="panel stack">
+          <div>
+            <h2 class="panel-title" style="margin:0 0 2px">{t.historyTitle}</h2>
+            <span class="hint">{t.historyHint}</span>
+            <span class="hint">
+              {history.loggedIn ? (
+                t.cloud
+              ) : (
+                <>
+                  {t.local}{' '}
+                  <button type="button" class="link-btn" onClick={openLogin}>
+                    {t.login}
+                  </button>{' '}
+                  {t.localTail}
+                </>
+              )}
+            </span>
+          </div>
+          {quotes.length === 0 && <span class="muted">{t.historyEmpty}</span>}
+          {quotes.map((q) => (
+            <div class="p3-q" key={q.id}>
+              <div class="p3-q-top">
+                <strong>{q.data.number}</strong>
+                <span class="muted small">{fmtDate(q.data.date, lang)}</span>
+                <span class="p3-q-amount">{q.data.totalText}</span>
+              </div>
+              <div class="small">{[q.data.title, q.data.client.name].filter(Boolean).join(' · ') || '—'}</div>
+              <div class="muted small">{q.data.partNames.join(', ')}</div>
+              {q.data.alt && (
+                <div class="muted small">
+                  ≈ {symbolOf(q.data.alt.cur, '')} {fmtNum(q.data.alt.total, lang, 2, 2)} · 1 {symbolOf(q.data.alt.cur, '')} = {q.data.currency} {fmtNum(q.data.alt.rate, lang, 2)}
+                  {q.data.alt.date ? ` · ${fmtDate(q.data.alt.date, lang)}` : ''}
+                </div>
+              )}
+              <div class="btn-row">
+                <button type="button" class="btn btn-sm" onClick={() => loadQuote(q.data)}>
+                  <Pencil aria-hidden="true" />
+                  {t.load}
+                </button>
+                <button type="button" class="btn btn-sm" onClick={() => void printQuote(q.data.doc)}>
+                  <Printer aria-hidden="true" />
+                  {t.reprint}
+                </button>
+                <button type="button" class="btn btn-sm" onClick={() => goTo('delivery', q.data)}>
+                  <Package aria-hidden="true" />
+                  {t.toDelivery}
+                </button>
+                <button type="button" class="btn btn-sm" onClick={() => goTo('receipt', q.data)}>
+                  <Receipt aria-hidden="true" />
+                  {t.toReceipt}
+                </button>
+                <button type="button" class="btn btn-sm" onClick={() => goTo('label', q.data)}>
+                  <Truck aria-hidden="true" />
+                  {t.toLabel}
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-ghost btn-danger"
+                  aria-label={t.del}
+                  title={t.del}
+                  onClick={async () => {
+                    if (!confirm(t.confirmDel(q.data.number))) return;
+                    await history.remove(q.id).catch(() => {});
+                    if (editing === q.data.number) setEditing(null);
+                  }}
+                >
+                  <Trash2 aria-hidden="true" />
+                </button>
+              </div>
+            </div>
+          ))}
         </section>
       </div>
 
@@ -478,6 +917,14 @@ export default function Print3dCalculator({ lang }: { lang: Lang }) {
         .p3-track { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
         .p3-fill { height: 100%; border-radius: 99px; background: var(--primary, #3b82f6); }
         .p3-issuer summary { cursor: pointer; font-weight: 600; }
+        .p3-sup { display: grid; grid-template-columns: minmax(0, 1fr) 150px 92px 40px; gap: 8px; align-items: center; }
+        .p3-sup-conv { grid-column: 1 / -1; margin-top: -4px; }
+        .p3-model { display: grid; gap: 12px; grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr); }
+        @media (max-width: 560px) { .p3-sup { grid-template-columns: minmax(0, 1fr) 40px; } .p3-sup .input-group, .p3-sup select { grid-column: 1 / -1; } .p3-model { grid-template-columns: 1fr; } }
+        .p3-editing { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .p3-q { display: grid; gap: 4px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+        .p3-q-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+        .p3-q-amount { margin-left: auto; font-weight: 650; font-variant-numeric: tabular-nums; }
         @media (max-width: 520px) { .p3-bar { grid-template-columns: 90px minmax(0, 1fr) auto; } }
       `}</style>
     </div>

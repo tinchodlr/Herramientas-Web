@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { Download, ExternalLink, Plus, Trash2, TriangleAlert } from 'lucide-preact';
-import { Field, NumInput, downloadBlob, parseNum, useStoredState, type Lang } from './shared/ui';
+import { Field, NumInput, downloadBlob, fmtNum, parseNum, useStoredState, type Lang } from './shared/ui';
 import { LogoPicker } from './shared/LogoPicker';
 import { LibraryBar } from './shared/Library';
 import { amountInWords } from '../lib/numwords';
+import { addressLine, takeHandoff } from '../lib/handoff';
 import { buildDocumentPdf, computeTotals, fmtDate, money, type DocData, type DocItem, type DocKind, type Issuer, type PdfWords } from './documents/pdf';
 
 const T = {
@@ -201,6 +202,20 @@ export default function Documents({ lang, kind }: { lang: Lang; kind: DocKind })
   const [amount, setAmount] = useState('');
   const [concept, setConcept] = useState('');
   const [reference, setReference] = useState('');
+
+  // Si llegamos desde un presupuesto de impresión 3D, se completan cliente y datos.
+  useEffect(() => {
+    const h = takeHandoff(kind === 'delivery' ? 'delivery' : 'receipt');
+    if (!h || kind === 'quote') return;
+    setClient({ name: h.client.name, taxId: h.client.taxId, address: addressLine(h.client) });
+    setReference(`${lang === 'es' ? 'Presupuesto' : 'Quote'} ${h.number}`);
+    if (kind === 'delivery') setItems(h.items.map((it) => ({ ...it, id: nextId++ })));
+    else {
+      setAmount(fmtNum(h.total, lang, 2, 2));
+      setConcept(`${lang === 'es' ? 'presupuesto' : 'quote'} ${h.number}`);
+      if (CURRENCIES.includes(h.currency)) setPrefs((p) => ({ ...p, currency: h.currency }));
+    }
+  }, []);
 
   const setI = <K extends keyof Issuer>(k: K, v: Issuer[K]) => setIssuer((s) => ({ ...s, [k]: v }));
   const setP = <K extends keyof typeof prefs>(k: K, v: (typeof prefs)[K]) => setPrefs((s) => ({ ...s, [k]: v }));

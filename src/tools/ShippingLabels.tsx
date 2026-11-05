@@ -4,6 +4,7 @@ import { createPortal } from 'preact/compat';
 import { Download, ImageUp, Printer, Trash2 } from 'lucide-preact';
 import { CopyButton, Field, Segmented, downloadText, useStoredState, type Lang } from './shared/ui';
 import { LibraryBar } from './shared/Library';
+import { takeHandoff } from '../lib/handoff';
 import { qrSvg } from './shared/qr';
 import {
   SIZE_MM, addressText, expandPackages, senderLine, whatsappLink,
@@ -173,6 +174,15 @@ export default function ShippingLabels({ lang }: { lang: Lang }) {
   const logoInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => setDate(new Date().toLocaleDateString('sv')), []);
+
+  // Si llegamos desde un presupuesto de impresión 3D, se completa el destinatario.
+  useEffect(() => {
+    const h = takeHandoff('label');
+    if (!h) return;
+    const { name, street, floor, barrio, city, cp, phone } = h.client;
+    setMode('single');
+    setRec({ ...EMPTY_RECIPIENT, order: h.number, name, street, floor, barrio, city, cp, phone, packages: '1' });
+  }, []);
 
   const setS = (k: keyof Sender, v: string) => setSender((p) => ({ ...p, [k]: v }));
   const setR = (k: keyof Recipient, v: string) => setRec((p) => ({ ...p, [k]: v }));
